@@ -702,16 +702,19 @@ export default function UsagePanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-refresh when background ingest completes
+  // Auto-refresh when background ingest completes. Also re-fetch snapshots so
+  // a forced provider refresh (which emits this event after completion) lands
+  // in the Rate Limits section without a second user action.
   useEffect(() => {
     const unlisten = listen("usage-ingest-complete", () => {
       void fetchOverview();
+      void fetchSnapshots();
     });
     return () => { unlisten.then((f) => f()); };
-  }, [fetchOverview]);
+  }, [fetchOverview, fetchSnapshots]);
 
   const handleRefresh = useCallback(async () => {
-    await refreshUsageData();
+    await refreshUsageData(true);
     void fetchSnapshots();
     void fetchOverview();
   }, [fetchOverview, fetchSnapshots]);

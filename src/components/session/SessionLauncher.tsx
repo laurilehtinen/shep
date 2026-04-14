@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import type { CodingAssistant, SessionMode } from "../../lib/types";
+import type { CodingAssistant, SessionMode, UsageProvider } from "../../lib/types";
 import { CODING_ASSISTANTS } from "../sidebar/constants";
 import { checkCommandExists } from "../../lib/tauri";
 import { useRepoStore } from "../../stores/useRepoStore";
+import { useUsageSettingsStore } from "../../stores/useUsageSettingsStore";
 import { HandMetal } from "lucide-react";
 import { assistantLogoSrc, getAssistantLogoClass } from "../../lib/assistantLogos";
 import { ASSISTANT_INSTALL_URLS } from "../sidebar/constants";
@@ -16,6 +17,7 @@ interface SessionLauncherProps {
 
 export default function SessionLauncher({ onStartSession }: SessionLauncherProps) {
   const activeRepoPath = useRepoStore((s) => s.activeRepoPath);
+  const usageSettings = useUsageSettingsStore((s) => s.settings);
 
   const [selectedAssistant, setSelectedAssistant] = useState<CodingAssistant | null>(null);
   const [available, setAvailable] = useState<Record<string, boolean>>({});
@@ -72,6 +74,7 @@ export default function SessionLauncher({ onStartSession }: SessionLauncherProps
           {CODING_ASSISTANTS.map((assistant) => {
             const logoUrl = assistantLogoSrc[assistant.id];
             const isAvailable = available[assistant.id] !== false;
+            const providerOff = usageSettings[assistant.id as UsageProvider]?.show === false;
             const logoClassName = [getAssistantLogoClass(assistant.id), !isAvailable ? "logo-unavailable" : null]
               .filter(Boolean)
               .join(" ");
@@ -91,7 +94,7 @@ export default function SessionLauncher({ onStartSession }: SessionLauncherProps
                     }
                   }}
                 >
-                  {logoUrl && <img src={logoUrl} alt="" width={18} height={18} className={logoClassName || undefined} />}
+                  {logoUrl && !providerOff && <img src={logoUrl} alt="" width={18} height={18} className={logoClassName || undefined} />}
                   <span>{assistant.name}</span>
                 </button>
                 {showPopover && installUrl && (

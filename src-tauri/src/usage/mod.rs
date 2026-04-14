@@ -239,6 +239,17 @@ fn spawn_provider_refresh(enabled: &EnabledProviders) {
     });
 }
 
+/// Force-refresh provider API caches for enabled providers, bypassing the
+/// staleness TTL. Blocks the current thread. Skips silently if another
+/// refresh is already running so we don't stack a second API call on top.
+pub fn force_refresh_providers(enabled: &EnabledProviders) {
+    if PROVIDER_REFRESH_RUNNING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    refresh_provider_cache_sync(enabled.claude, enabled.codex, enabled.gemini);
+    PROVIDER_REFRESH_RUNNING.store(false, Ordering::SeqCst);
+}
+
 /// Actual (blocking) provider refresh — only called from background thread.
 fn refresh_provider_cache_sync(do_claude: bool, do_codex: bool, do_gemini: bool) {
     let now = now_epoch_seconds();

@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
-import type { TerminalTabData, TabActivity } from "../../lib/types";
+import type { TerminalTabData, TabActivity, UsageProvider } from "../../lib/types";
 import { assistantLogoSrc, getAssistantLogoClass } from "../../lib/assistantLogos";
 import { useTerminalStore } from "../../stores/useTerminalStore";
+import { useUsageSettingsStore } from "../../stores/useUsageSettingsStore";
 import { handleActionKey } from "../../lib/a11y";
 import { X } from "lucide-react";
 import ContextMenu from "../shared/ContextMenu";
@@ -28,6 +29,9 @@ export default function AssistantButton({
   onClose,
 }: AssistantButtonProps) {
   const logoUrl = tab.assistantId ? assistantLogoSrc[tab.assistantId] : null;
+  const providerOff = useUsageSettingsStore(
+    (s) => tab.assistantId != null && s.settings[tab.assistantId as UsageProvider]?.show === false,
+  );
   const activity: TabActivity | undefined = useTerminalStore((s) => s.tabActivity[tab.ptyId]);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -58,7 +62,7 @@ export default function AssistantButton({
         aria-pressed={isActive}
         aria-label={`Open assistant tab ${tab.label}`}
       >
-        {logoUrl && <img src={logoUrl} alt="" width={14} height={14} className={tab.assistantId ? getAssistantLogoClass(tab.assistantId) : undefined} />}
+        {logoUrl && !providerOff && <img src={logoUrl} alt="" width={14} height={14} className={tab.assistantId ? getAssistantLogoClass(tab.assistantId) : undefined} />}
         <span className="truncate text-left">{tab.label}</span>
         <span className={`sidebar-status-dot ${dotClass(activity)}`} />
       </div>

@@ -474,10 +474,25 @@ pub async fn get_usage_overview(db: State<'_, UsageDb>, window: String) -> Resul
 }
 
 #[tauri::command]
-pub fn refresh_usage_data(db: State<'_, UsageDb>, app: tauri::AppHandle) {
+pub fn refresh_usage_data(
+    db: State<'_, UsageDb>,
+    workspace: State<'_, WorkspaceManager>,
+    app: tauri::AppHandle,
+    force_providers: Option<bool>,
+) {
     let db = db.inner().clone();
+    // Resolve enabled providers on the caller thread — workspace State can't
+    // cross the thread boundary.
+    let enabled = if force_providers.unwrap_or(false) {
+        Some(enabled_from(&workspace.load_usage_settings().unwrap_or_default()))
+    } else {
+        None
+    };
     std::thread::spawn(move || {
         crate::usage::run_background_ingest(&db);
+        if let Some(enabled) = enabled.as_ref() {
+            crate::usage::force_refresh_providers(enabled);
+        }
         let _ = app.emit("usage-ingest-complete", ());
     });
 }

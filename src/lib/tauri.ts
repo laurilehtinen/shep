@@ -261,8 +261,8 @@ export function getUsageOverview(window: string): Promise<UsageOverview> {
   return invoke("get_usage_overview", { window });
 }
 
-export function refreshUsageData(): Promise<void> {
-  return invoke("refresh_usage_data");
+export function refreshUsageData(forceProviders?: boolean): Promise<void> {
+  return invoke("refresh_usage_data", { forceProviders });
 }
 
 export interface MemoryStats {
