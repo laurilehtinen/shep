@@ -84,6 +84,7 @@ export default function SettingsPanel() {
   const loadUsageSettings = useUsageSettingsStore((s) => s.loadSettings);
   const updateProvider = useUsageSettingsStore((s) => s.updateProvider);
   const [budgetInputs, setBudgetInputs] = useState<Record<string, string>>({});
+  const [cutoffInputs, setCutoffInputs] = useState<Record<string, string>>({});
 
   const updateStatus = useUpdateStore((s) => s.status);
   const availableVersion = useUpdateStore((s) => s.availableVersion);
@@ -506,8 +507,11 @@ export default function SettingsPanel() {
               ? "Codex"
               : provider === "gemini"
                 ? "Gemini"
-                : "opencode";
+                : provider === "kilo"
+                  ? "Kilo"
+                  : "opencode";
           const budgetInput = budgetInputs[provider] ?? (config.monthlyBudget != null ? String(config.monthlyBudget) : "");
+          const cutoffInput = cutoffInputs[provider] ?? (config.budgetCutoffDay != null ? String(config.budgetCutoffDay) : "");
           return (
             <div key={provider} className="usage-provider-row">
               <span className="usage-provider-row__name">
@@ -535,30 +539,62 @@ export default function SettingsPanel() {
                   ))}
 
                   {config.budgetMode === "custom" && (
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      inputMode="decimal"
-                      placeholder="$ / month"
-                      value={budgetInput}
-                      onChange={(event) =>
-                        setBudgetInputs((prev) => ({ ...prev, [provider]: event.target.value }))
-                      }
-                      onBlur={() => {
-                        const trimmed = budgetInput.trim();
-                        const nextBudget = trimmed === "" ? null : Number(trimmed);
-                        if (nextBudget == null || Number.isFinite(nextBudget)) {
-                          void updateProvider(provider, { monthlyBudget: nextBudget });
+                    <>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        inputMode="decimal"
+                        placeholder="$ / month"
+                        value={budgetInput}
+                        onChange={(event) =>
+                          setBudgetInputs((prev) => ({ ...prev, [provider]: event.target.value }))
                         }
-                        setBudgetInputs((prev) => {
-                          const next = { ...prev };
-                          delete next[provider];
-                          return next;
-                        });
-                      }}
-                      className="usage-provider-row__budget-input"
-                    />
+                        onBlur={() => {
+                          const trimmed = budgetInput.trim();
+                          const nextBudget = trimmed === "" ? null : Number(trimmed);
+                          if (nextBudget == null || Number.isFinite(nextBudget)) {
+                            void updateProvider(provider, { monthlyBudget: nextBudget });
+                          }
+                          setBudgetInputs((prev) => {
+                            const next = { ...prev };
+                            delete next[provider];
+                            return next;
+                          });
+                        }}
+                        className="usage-provider-row__budget-input"
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        max="28"
+                        step="1"
+                        inputMode="numeric"
+                        placeholder="day 1"
+                        title="Day of month the billing cycle resets (1–28)"
+                        value={cutoffInput}
+                        onChange={(event) =>
+                          setCutoffInputs((prev) => ({ ...prev, [provider]: event.target.value }))
+                        }
+                        onBlur={() => {
+                          const trimmed = cutoffInput.trim();
+                          let nextDay: number | null = null;
+                          if (trimmed !== "") {
+                            const parsed = Number(trimmed);
+                            if (Number.isFinite(parsed)) {
+                              nextDay = Math.min(28, Math.max(1, Math.round(parsed)));
+                            }
+                          }
+                          void updateProvider(provider, { budgetCutoffDay: nextDay });
+                          setCutoffInputs((prev) => {
+                            const next = { ...prev };
+                            delete next[provider];
+                            return next;
+                          });
+                        }}
+                        className="usage-provider-row__budget-input"
+                      />
+                    </>
                   )}
                 </>
               )}

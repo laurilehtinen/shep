@@ -3,10 +3,11 @@ import { getUsageSettings, saveUsageSettings } from "../lib/tauri";
 import type { UsageSettings, UsageProvider, ProviderBudgetConfig } from "../lib/types";
 
 const DEFAULT_SETTINGS: UsageSettings = {
-  claude: { show: true, budgetMode: "subscription", monthlyBudget: null },
-  codex: { show: true, budgetMode: "subscription", monthlyBudget: null },
-  gemini: { show: false, budgetMode: "subscription", monthlyBudget: null },
-  opencode: { show: true, budgetMode: "custom", monthlyBudget: 100 },
+  claude: { show: true, budgetMode: "subscription", monthlyBudget: null, budgetCutoffDay: null },
+  codex: { show: true, budgetMode: "subscription", monthlyBudget: null, budgetCutoffDay: null },
+  gemini: { show: false, budgetMode: "subscription", monthlyBudget: null, budgetCutoffDay: null },
+  opencode: { show: true, budgetMode: "custom", monthlyBudget: 100, budgetCutoffDay: null },
+  kilo: { show: true, budgetMode: "custom", monthlyBudget: 100, budgetCutoffDay: null },
 };
 
 interface UsageSettingsStore {

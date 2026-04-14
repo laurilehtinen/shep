@@ -73,6 +73,10 @@ pub fn claude_provider_windows() -> Result<(Vec<UsageWindowSnapshot>, Vec<UsageW
     let json: Value = serde_json::from_str(&body)
         .map_err(|e| format!("Failed to parse Claude usage response: {e}"))?;
 
+    if let Some(msg) = api_error_message(&json) {
+        return Err(msg);
+    }
+
     let mut primary = Vec::new();
     let mut extra = Vec::new();
 
@@ -92,6 +96,18 @@ pub fn claude_provider_windows() -> Result<(Vec<UsageWindowSnapshot>, Vec<UsageW
         Err("Claude usage response did not include expected windows".to_string())
     } else {
         Ok((primary, extra))
+    }
+}
+
+fn api_error_message(json: &Value) -> Option<String> {
+    let err = json.get("error")?;
+    let msg = err.get("message").and_then(Value::as_str).unwrap_or("").trim();
+    let kind = err.get("type").and_then(Value::as_str).unwrap_or("").trim();
+    match (kind, msg) {
+        ("rate_limit_error", _) => Some("Anthropic usage API is rate-limited — try again shortly".to_string()),
+        (_, m) if !m.is_empty() => Some(m.to_string()),
+        (k, _) if !k.is_empty() => Some(k.to_string()),
+        _ => None,
     }
 }
 
@@ -184,10 +200,14 @@ fn gemini_get_access_token() -> Result<String, String> {
         .and_then(Value::as_str)
         .ok_or_else(|| "Missing refresh_token in Gemini OAuth creds".to_string())?;
 
-    let body = format!(
-        "client_id={}&client_secret={}&refresh_token={}&grant_type=refresh_token",
-        GEMINI_OAUTH_CLIENT_ID, GEMINI_OAUTH_CLIENT_SECRET, refresh_token
-    );
+    // Use the form serializer so refresh_token (and any future field)
+    // is properly URL-encoded — never interpolated raw into the body.
+    let body = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("client_id", GEMINI_OAUTH_CLIENT_ID)
+        .append_pair("client_secret", GEMINI_OAUTH_CLIENT_SECRET)
+        .append_pair("refresh_token", refresh_token)
+        .append_pair("grant_type", "refresh_token")
+        .finish();
 
     let response = run_command("curl", &[
         "-sS", "--max-time", "10",

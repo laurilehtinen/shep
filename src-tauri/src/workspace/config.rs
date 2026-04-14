@@ -163,6 +163,10 @@ pub struct ProviderBudgetConfig {
     pub budget_mode: String,
     #[serde(default, rename = "monthlyBudget")]
     pub monthly_budget: Option<f64>,
+    /// Day of month (1-28) when the custom monthly budget cycle resets.
+    /// `None` defaults to the 1st. Capped at 28 so every month has a matching day.
+    #[serde(default, rename = "budgetCutoffDay")]
+    pub budget_cutoff_day: Option<u32>,
 }
 
 fn default_budget_mode_subscription() -> String {
@@ -175,6 +179,7 @@ impl ProviderBudgetConfig {
             show: true,
             budget_mode: "subscription".to_string(),
             monthly_budget: None,
+            budget_cutoff_day: None,
         }
     }
 
@@ -183,6 +188,7 @@ impl ProviderBudgetConfig {
             show: true,
             budget_mode: "custom".to_string(),
             monthly_budget: None,
+            budget_cutoff_day: None,
         }
     }
 }
@@ -205,6 +211,8 @@ pub struct UsageSettings {
     pub gemini: ProviderBudgetConfig,
     #[serde(default = "default_provider_custom")]
     pub opencode: ProviderBudgetConfig,
+    #[serde(default = "default_provider_custom")]
+    pub kilo: ProviderBudgetConfig,
 }
 
 impl Default for UsageSettings {
@@ -214,6 +222,10 @@ impl Default for UsageSettings {
             codex: ProviderBudgetConfig::default_subscription(),
             gemini: ProviderBudgetConfig { show: false, ..ProviderBudgetConfig::default_subscription() },
             opencode: ProviderBudgetConfig {
+                monthly_budget: Some(100.0),
+                ..ProviderBudgetConfig::default_custom()
+            },
+            kilo: ProviderBudgetConfig {
                 monthly_budget: Some(100.0),
                 ..ProviderBudgetConfig::default_custom()
             },

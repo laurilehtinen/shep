@@ -507,7 +507,18 @@ pub fn list_files(path: &str) -> Result<Vec<String>, String> {
 pub fn file_contents(path: &str, file_path: &str, source: &str) -> Result<String, String> {
     match source {
         "working" => {
-            let full_path = std::path::Path::new(path).join(file_path);
+            // Confine to the repo root: canonicalize both sides and assert containment
+            // so file_path values like "../../etc/passwd" or absolute paths are rejected
+            // (Path::join with an absolute right-hand side replaces the base).
+            let base = std::path::Path::new(path)
+                .canonicalize()
+                .map_err(|e| format!("Cannot resolve repo path: {e}"))?;
+            let full_path = base.join(file_path)
+                .canonicalize()
+                .map_err(|e| format!("Cannot read {file_path}: {e}"))?;
+            if !full_path.starts_with(&base) {
+                return Err(format!("Path {file_path} escapes repository root"));
+            }
             let metadata = std::fs::metadata(&full_path)
                 .map_err(|e| format!("Cannot read {file_path}: {e}"))?;
             if metadata.len() > MAX_FILE_PREVIEW_BYTES {

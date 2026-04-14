@@ -99,10 +99,23 @@ fn resolved_cost(
         .map(|p| calculate_cost(p, input, output, cache_read, cache_write, thoughts))
 }
 
-fn local_month_cutoff(conn: &Connection) -> i64 {
+/// Epoch seconds for the start of the current billing cycle.
+/// `cutoff_day` is clamped to 1..=28 so every month has a matching day.
+/// If today's day-of-month >= cutoff_day, the cycle started this month on `cutoff_day`;
+/// otherwise it started last month on `cutoff_day`.
+fn local_month_cutoff(conn: &Connection, cutoff_day: u32) -> i64 {
+    let day = cutoff_day.clamp(1, 28);
+    let offset_days = (day - 1) as i32;
     conn.query_row(
-        "SELECT CAST(strftime('%s', 'now', 'localtime', 'start of month', 'utc') AS INTEGER)",
-        [],
+        "SELECT CAST(strftime('%s',
+            CASE
+              WHEN CAST(strftime('%d', 'now', 'localtime') AS INTEGER) >= ?1
+              THEN date('now', 'localtime', 'start of month', '+' || ?2 || ' days')
+              ELSE date('now', 'localtime', 'start of month', '-1 months', '+' || ?2 || ' days')
+            END,
+            'utc'
+         ) AS INTEGER)",
+        params![day as i64, offset_days as i64],
         |row| row.get::<_, i64>(0),
     ).unwrap_or(0)
 }
@@ -157,14 +170,15 @@ fn windowed_cost(conn: &Connection, provider: &str, cutoff: i64, pricing: &Prici
 }
 
 /// Query the DB for local usage details for a given provider.
-pub fn local_details(conn: &Connection, provider: &str) -> Option<LocalUsageDetails> {
+/// `month_cutoff_day` is the billing cycle start day (1-28). 1 matches the calendar month.
+pub fn local_details(conn: &Connection, provider: &str, month_cutoff_day: u32) -> Option<LocalUsageDetails> {
     let now = now_epoch_seconds() as i64;
     let t5h = now - 18_000;
     let t7d = now - 604_800;
     let t30d = now - 2_592_000;
 
     let pricing = load_pricing(conn);
-    let month_cutoff = local_month_cutoff(conn);
+    let month_cutoff = local_month_cutoff(conn, month_cutoff_day);
 
     // Time-windowed totals
     let (tokens_5h, tokens_7d, tokens_30d, tokens_total) = conn
@@ -237,7 +251,7 @@ pub fn local_details(conn: &Connection, provider: &str) -> Option<LocalUsageDeta
 }
 
 /// Query local details scoped to a specific time window.
-pub fn windowed_details(conn: &Connection, provider: &str, window: &str) -> Option<LocalUsageDetails> {
+pub fn windowed_details(conn: &Connection, provider: &str, window: &str, month_cutoff_day: u32) -> Option<LocalUsageDetails> {
     let now = now_epoch_seconds() as i64;
     let cutoff = match window {
         "5h" => now - 18_000,
@@ -247,7 +261,7 @@ pub fn windowed_details(conn: &Connection, provider: &str, window: &str) -> Opti
     };
 
     let pricing = load_pricing(conn);
-    let month_cutoff = local_month_cutoff(conn);
+    let month_cutoff = local_month_cutoff(conn, month_cutoff_day);
 
     let tokens_total: i64 = conn
         .query_row(

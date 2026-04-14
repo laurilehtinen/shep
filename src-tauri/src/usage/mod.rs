@@ -80,6 +80,14 @@ impl ProviderState {
         // (last_error_logged is set to false when error changes)
         !self.last_error_logged
     }
+
+    fn surfaced_error(&self) -> Option<String> {
+        if self.consecutive_errors > 0 && !self.last_error.is_empty() {
+            Some(self.last_error.clone())
+        } else {
+            None
+        }
+    }
 }
 
 enum ProviderCacheData {
@@ -107,40 +115,70 @@ pub struct EnabledProviders {
     pub gemini: bool,
 }
 
+/// Per-provider billing cycle start day (1..=28). 1 = calendar month.
+pub struct ProviderCutoffs {
+    pub claude: u32,
+    pub codex: u32,
+    pub gemini: u32,
+    pub opencode: u32,
+    pub kilo: u32,
+}
+
+impl Default for ProviderCutoffs {
+    fn default() -> Self {
+        ProviderCutoffs { claude: 1, codex: 1, gemini: 1, opencode: 1, kilo: 1 }
+    }
+}
+
+impl ProviderCutoffs {
+    pub fn for_provider(&self, provider: &str) -> u32 {
+        match provider {
+            "claude" => self.claude,
+            "codex" => self.codex,
+            "gemini" => self.gemini,
+            "opencode" => self.opencode,
+            "kilo" => self.kilo,
+            _ => 1,
+        }
+    }
+}
+
 /// Fetch snapshots for all providers from whatever is currently in the DB.
 /// Does NOT trigger ingestion — that runs in the background.
 /// Provider API refresh happens in a background thread so this never blocks
 /// on network I/O.
-pub fn get_all_usage_snapshots(db: &UsageDb, enabled: &EnabledProviders) -> Vec<ProviderUsageSnapshot> {
+pub fn get_all_usage_snapshots(db: &UsageDb, enabled: &EnabledProviders, cutoffs: &ProviderCutoffs) -> Vec<ProviderUsageSnapshot> {
     spawn_provider_refresh(enabled);
 
     let conn = db.conn.lock().unwrap();
     vec![
-        claude_snapshot(&conn),
-        codex_snapshot(&conn),
-        gemini_snapshot(&conn),
-        opencode_snapshot(&conn),
+        claude_snapshot(&conn, cutoffs.claude),
+        codex_snapshot(&conn, cutoffs.codex),
+        gemini_snapshot(&conn, cutoffs.gemini),
+        opencode_snapshot(&conn, cutoffs.opencode),
+        kilo_snapshot(&conn, cutoffs.kilo),
     ]
 }
 
 /// Fetch snapshot for a single provider.
-pub fn get_usage_snapshot(db: &UsageDb, provider: &str, enabled: &EnabledProviders) -> Result<ProviderUsageSnapshot, String> {
+pub fn get_usage_snapshot(db: &UsageDb, provider: &str, enabled: &EnabledProviders, cutoffs: &ProviderCutoffs) -> Result<ProviderUsageSnapshot, String> {
     spawn_provider_refresh(enabled);
 
     let conn = db.conn.lock().unwrap();
     match provider {
-        "codex" => Ok(codex_snapshot(&conn)),
-        "claude" => Ok(claude_snapshot(&conn)),
-        "gemini" => Ok(gemini_snapshot(&conn)),
-        "opencode" => Ok(opencode_snapshot(&conn)),
+        "codex" => Ok(codex_snapshot(&conn, cutoffs.codex)),
+        "claude" => Ok(claude_snapshot(&conn, cutoffs.claude)),
+        "gemini" => Ok(gemini_snapshot(&conn, cutoffs.gemini)),
+        "opencode" => Ok(opencode_snapshot(&conn, cutoffs.opencode)),
+        "kilo" => Ok(kilo_snapshot(&conn, cutoffs.kilo)),
         other => Err(format!("Unsupported usage provider: {other}")),
     }
 }
 
 /// Fetch local details for a provider scoped to a time window (5h, 7d, 30d).
-pub fn get_windowed_details(db: &UsageDb, provider: &str, window: &str) -> Result<LocalUsageDetails, String> {
+pub fn get_windowed_details(db: &UsageDb, provider: &str, window: &str, cutoff_day: u32) -> Result<LocalUsageDetails, String> {
     let conn = db.conn.lock().unwrap();
-    queries::windowed_details(&conn, provider, window)
+    queries::windowed_details(&conn, provider, window, cutoff_day)
         .ok_or_else(|| format!("No data for {provider}/{window}"))
 }
 
@@ -260,14 +298,15 @@ fn refresh_provider_cache_sync(do_claude: bool, do_codex: bool, do_gemini: bool)
     }
 }
 
-fn codex_snapshot(conn: &rusqlite::Connection) -> ProviderUsageSnapshot {
+fn codex_snapshot(conn: &rusqlite::Connection, cutoff_day: u32) -> ProviderUsageSnapshot {
     let fetched_at = helpers::now_iso_string();
-    let local = queries::local_details(conn, "codex");
+    let local = queries::local_details(conn, "codex", cutoff_day);
     let cache = PROVIDER_CACHE.lock().unwrap();
     let cached_windows: Option<Vec<UsageWindowSnapshot>> = match &cache.codex.cache {
         Some(ProviderCacheData::Codex(w)) => Some(w.clone()),
         _ => None,
     };
+    let cached_error = cache.codex.surfaced_error();
     drop(cache);
 
     let mut summary_windows = Vec::new();
@@ -299,18 +338,19 @@ fn codex_snapshot(conn: &rusqlite::Connection) -> ProviderUsageSnapshot {
         summary_windows,
         extra_windows: Vec::new(),
         local_details: local,
-        error: None,
+        error: if has_provider { None } else { cached_error },
     }
 }
 
-fn claude_snapshot(conn: &rusqlite::Connection) -> ProviderUsageSnapshot {
+fn claude_snapshot(conn: &rusqlite::Connection, cutoff_day: u32) -> ProviderUsageSnapshot {
     let fetched_at = helpers::now_iso_string();
-    let local = queries::local_details(conn, "claude");
+    let local = queries::local_details(conn, "claude", cutoff_day);
     let cache = PROVIDER_CACHE.lock().unwrap();
     let cached_data: Option<(Vec<UsageWindowSnapshot>, Vec<UsageWindowSnapshot>)> = match &cache.claude.cache {
         Some(ProviderCacheData::Claude(p, e)) => Some((p.clone(), e.clone())),
         _ => None,
     };
+    let cached_error = cache.claude.surfaced_error();
     drop(cache);
 
     let mut summary_windows = Vec::new();
@@ -344,18 +384,19 @@ fn claude_snapshot(conn: &rusqlite::Connection) -> ProviderUsageSnapshot {
         summary_windows,
         extra_windows,
         local_details: local,
-        error: None,
+        error: if has_provider { None } else { cached_error },
     }
 }
 
-fn gemini_snapshot(conn: &rusqlite::Connection) -> ProviderUsageSnapshot {
+fn gemini_snapshot(conn: &rusqlite::Connection, cutoff_day: u32) -> ProviderUsageSnapshot {
     let fetched_at = helpers::now_iso_string();
-    let local = queries::local_details(conn, "gemini");
+    let local = queries::local_details(conn, "gemini", cutoff_day);
     let cache = PROVIDER_CACHE.lock().unwrap();
     let cached_windows: Option<Vec<UsageWindowSnapshot>> = match &cache.gemini.cache {
         Some(ProviderCacheData::Gemini(w)) => Some(w.clone()),
         _ => None,
     };
+    let cached_error = cache.gemini.surfaced_error();
     drop(cache);
 
     let mut summary_windows = Vec::new();
@@ -389,13 +430,13 @@ fn gemini_snapshot(conn: &rusqlite::Connection) -> ProviderUsageSnapshot {
         summary_windows,
         extra_windows: Vec::new(),
         local_details: local,
-        error: None,
+        error: if has_provider { None } else { cached_error },
     }
 }
 
-fn opencode_snapshot(conn: &rusqlite::Connection) -> ProviderUsageSnapshot {
+fn opencode_snapshot(conn: &rusqlite::Connection, cutoff_day: u32) -> ProviderUsageSnapshot {
     let fetched_at = helpers::now_iso_string();
-    let local = queries::local_details(conn, "opencode");
+    let local = queries::local_details(conn, "opencode", cutoff_day);
     let mut summary_windows = Vec::new();
 
     if let Some(ref details) = local {
@@ -417,6 +458,39 @@ fn opencode_snapshot(conn: &rusqlite::Connection) -> ProviderUsageSnapshot {
 
     ProviderUsageSnapshot {
         provider: "opencode".to_string(),
+        status: if local.is_some() { "ready".to_string() } else { "unavailable".to_string() },
+        fetched_at,
+        summary_windows,
+        extra_windows: Vec::new(),
+        local_details: local,
+        error: None,
+    }
+}
+
+fn kilo_snapshot(conn: &rusqlite::Connection, cutoff_day: u32) -> ProviderUsageSnapshot {
+    let fetched_at = helpers::now_iso_string();
+    let local = queries::local_details(conn, "kilo", cutoff_day);
+    let mut summary_windows = Vec::new();
+
+    if let Some(ref details) = local {
+        for (window, tokens) in [("5h", details.tokens_5h), ("7d", details.tokens_7d), ("30d", details.tokens_30d)] {
+            summary_windows.push(UsageWindowSnapshot {
+                provider: "kilo".to_string(),
+                window: window.to_string(),
+                label: window.to_string(),
+                source_type: "local".to_string(),
+                confidence: "observed".to_string(),
+                used_percent: None,
+                remaining_percent: None,
+                reset_at: None,
+                token_total: Some(tokens),
+                pace_status: None,
+            });
+        }
+    }
+
+    ProviderUsageSnapshot {
+        provider: "kilo".to_string(),
         status: if local.is_some() { "ready".to_string() } else { "unavailable".to_string() },
         fetched_at,
         summary_windows,

@@ -1,7 +1,7 @@
 import type { ProviderUsageSnapshot, UsageProvider, UsageWindowSnapshot } from "../../lib/types";
 
 const WINDOW_PRIORITY = ["5h", "7d", "30d"];
-export const ALL_USAGE_PROVIDERS: UsageProvider[] = ["claude", "codex", "gemini", "opencode"];
+export const ALL_USAGE_PROVIDERS: UsageProvider[] = ["claude", "codex", "gemini", "opencode", "kilo"];
 export const TONE_COLORS: Record<string, string> = {
   low: "rgba(52, 211, 153, 0.75)",
   medium: "rgba(245, 158, 11, 0.75)",
@@ -37,6 +37,8 @@ export function getProviderLabel(provider: UsageProvider): string {
       return "Gemini";
     case "opencode":
       return "opencode";
+    case "kilo":
+      return "Kilo";
   }
 }
 
@@ -142,63 +144,43 @@ export function barTone(pace: ReturnType<typeof computePace>, pct: number | null
   return "low";
 }
 
-function currentMonthRange(now: Date) {
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+/// Compute the start/end of the current billing cycle for a given cutoff day (1-28).
+/// If cutoffDay is null/undefined, the cycle matches the calendar month.
+export function billingCycleRange(now: Date, cutoffDay: number | null | undefined): { start: Date; end: Date } {
+  const day = cutoffDay == null ? 1 : Math.min(28, Math.max(1, Math.round(cutoffDay)));
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const cycleMonthOffset = d >= day ? 0 : -1;
+  const start = new Date(y, m + cycleMonthOffset, day, 0, 0, 0, 0);
+  const end = new Date(y, m + cycleMonthOffset + 1, day, 0, 0, 0, 0);
   return { start, end };
 }
 
-function currentFiveHourBlock(now: Date) {
-  const start = new Date(now);
-  const hour = start.getHours();
-  start.setHours(hour - (hour % 5), 0, 0, 0);
-  const end = new Date(start);
-  end.setHours(start.getHours() + 5);
-  return { start, end };
-}
-
-function currentSevenDayBlock(now: Date) {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - start.getDay());
-  const end = new Date(start);
-  end.setDate(start.getDate() + 7);
-  return { start, end };
-}
-
+/// Build a synthetic window showing current billing-cycle progress against the monthly budget.
+/// The same percentage is used for any window (5h, 7d, 30d) — custom budgets are monthly, so
+/// the bar reflects the month's spend regardless of which time window the sidebar is filtered to.
 export function syntheticBudgetWindow(
   provider: UsageProvider,
   window: "5h" | "7d",
-  cost: number | null,
+  costMonth: number | null,
   monthlyBudget: number | null,
 ): UsageWindowSnapshot | null {
-  if (cost == null || monthlyBudget == null || monthlyBudget <= 0) {
+  if (costMonth == null || monthlyBudget == null || monthlyBudget <= 0) {
     return null;
   }
 
-  const now = new Date();
-  const month = currentMonthRange(now);
-  const budgetRange = window === "5h" ? currentFiveHourBlock(now) : currentSevenDayBlock(now);
-  const monthDays = Math.max(Math.round((month.end.getTime() - month.start.getTime()) / (24 * 60 * 60 * 1000)), 1);
-  const monthDurationMs = monthDays * 8 * 60 * 60 * 1000;
-  const rangeDurationMs = window === "5h"
-    ? 5 * 60 * 60 * 1000
-    : 7 * 8 * 60 * 60 * 1000;
-
-  if (monthDurationMs <= 0 || rangeDurationMs <= 0) return null;
-
-  const windowBudget = monthlyBudget * (rangeDurationMs / monthDurationMs);
-  if (windowBudget <= 0) return null;
+  const usedPercent = (costMonth / monthlyBudget) * 100;
 
   return {
     provider,
     window,
-    label: window,
+    label: "monthly",
     sourceType: "local",
     confidence: "estimated",
-    usedPercent: (cost / windowBudget) * 100,
-    remainingPercent: Math.max(100 - (cost / windowBudget) * 100, 0),
-    resetAt: new Date(budgetRange.end).toISOString(),
+    usedPercent,
+    remainingPercent: Math.max(100 - usedPercent, 0),
+    resetAt: null,
     tokenTotal: null,
     paceStatus: null,
   };

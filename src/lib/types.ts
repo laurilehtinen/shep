@@ -199,7 +199,7 @@ export interface PtyColorTheme {
 
 // ── Usage ──────────────────────────────────────────────────────────
 
-export type UsageProvider = "codex" | "claude" | "gemini" | "opencode";
+export type UsageProvider = "codex" | "claude" | "gemini" | "opencode" | "kilo";
 
 export type BudgetMode = "subscription" | "custom";
 
@@ -207,6 +207,7 @@ export interface ProviderBudgetConfig {
   show: boolean;
   budgetMode: BudgetMode;
   monthlyBudget: number | null;
+  budgetCutoffDay: number | null;
 }
 
 export interface UsageSettings {
@@ -214,6 +215,7 @@ export interface UsageSettings {
   codex: ProviderBudgetConfig;
   gemini: ProviderBudgetConfig;
   opencode: ProviderBudgetConfig;
+  kilo: ProviderBudgetConfig;
 }
 export type UsageSourceType = "provider" | "local";
 export type UsageConfidence = "official" | "observed" | "estimated";

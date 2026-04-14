@@ -66,7 +66,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/stumptowndoug/shep/releases/latest/download/latest.json"
+        "https://github.com/laurilehtinen/shep/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFENUI5MjhFQ0I1QThGM0IKUldRN2oxckxqcEpiSGZocmVQUDBpSFN4dDFZempVSWgrMDNzZmFCWHphTkpSR2xvaDZvMzAyNVUK"
     }

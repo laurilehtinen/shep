@@ -402,8 +402,10 @@ pub async fn get_all_usage_snapshots(
     db: State<'_, UsageDb>,
     workspace: State<'_, WorkspaceManager>,
 ) -> Result<Vec<ProviderUsageSnapshot>, String> {
-    let enabled = enabled_providers(&workspace);
-    Ok(crate::usage::get_all_usage_snapshots(&db, &enabled))
+    let settings = workspace.load_usage_settings().unwrap_or_default();
+    let enabled = enabled_from(&settings);
+    let cutoffs = cutoffs_from(&settings);
+    Ok(crate::usage::get_all_usage_snapshots(&db, &enabled, &cutoffs))
 }
 
 #[tauri::command]
@@ -412,16 +414,30 @@ pub async fn get_usage_snapshot(
     workspace: State<'_, WorkspaceManager>,
     provider: String,
 ) -> Result<ProviderUsageSnapshot, String> {
-    let enabled = enabled_providers(&workspace);
-    crate::usage::get_usage_snapshot(&db, &provider, &enabled)
+    let settings = workspace.load_usage_settings().unwrap_or_default();
+    let enabled = enabled_from(&settings);
+    let cutoffs = cutoffs_from(&settings);
+    crate::usage::get_usage_snapshot(&db, &provider, &enabled, &cutoffs)
 }
 
-fn enabled_providers(workspace: &State<'_, WorkspaceManager>) -> crate::usage::EnabledProviders {
-    let settings = workspace.load_usage_settings().unwrap_or_default();
+fn enabled_from(settings: &UsageSettings) -> crate::usage::EnabledProviders {
     crate::usage::EnabledProviders {
         claude: settings.claude.show,
         codex: settings.codex.show,
         gemini: settings.gemini.show,
+    }
+}
+
+fn cutoffs_from(settings: &UsageSettings) -> crate::usage::ProviderCutoffs {
+    let pick = |cfg: &crate::workspace::config::ProviderBudgetConfig| -> u32 {
+        cfg.budget_cutoff_day.unwrap_or(1).clamp(1, 28)
+    };
+    crate::usage::ProviderCutoffs {
+        claude: pick(&settings.claude),
+        codex: pick(&settings.codex),
+        gemini: pick(&settings.gemini),
+        opencode: pick(&settings.opencode),
+        kilo: pick(&settings.kilo),
     }
 }
 
@@ -441,8 +457,15 @@ pub fn save_usage_settings(
 }
 
 #[tauri::command]
-pub async fn get_usage_details(db: State<'_, UsageDb>, provider: String, window: String) -> Result<LocalUsageDetails, String> {
-    crate::usage::get_windowed_details(&db, &provider, &window)
+pub async fn get_usage_details(
+    db: State<'_, UsageDb>,
+    workspace: State<'_, WorkspaceManager>,
+    provider: String,
+    window: String,
+) -> Result<LocalUsageDetails, String> {
+    let settings = workspace.load_usage_settings().unwrap_or_default();
+    let cutoff_day = cutoffs_from(&settings).for_provider(&provider);
+    crate::usage::get_windowed_details(&db, &provider, &window, cutoff_day)
 }
 
 #[tauri::command]
@@ -801,7 +824,20 @@ fn match_project(cwd: &str, repo_paths: &[String]) -> String {
 }
 
 #[tauri::command]
-pub async fn kill_port(pid: u32) -> Result<(), String> {
+pub async fn kill_port(
+    pid: u32,
+    workspace: State<'_, WorkspaceManager>,
+) -> Result<(), String> {
+    // Confine kill targets to PIDs we currently surface as dev processes
+    // listening on TCP ports. Without this, a compromised renderer could send
+    // any PID owned by the user (shell, editor, launchd children, etc.).
+    let ports = list_listening_ports(workspace).await?;
+    if !ports.iter().any(|p| p.pid == pid) {
+        return Err(format!(
+            "PID {pid} is not a known dev process listening on a port"
+        ));
+    }
+
     // SIGTERM first, then SIGKILL if needed
     let pid_str = pid.to_string();
     let status = Command::new("kill")

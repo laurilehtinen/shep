@@ -62,7 +62,7 @@ export default function SidebarUsage() {
             ? syntheticBudgetWindow(
                 provider,
                 budgetWindow,
-                local ? budgetWindow === "5h" ? local.cost5h : local.cost7d : null,
+                local?.costMonth ?? null,
                 providerConfig.monthlyBudget,
               )
             : null;

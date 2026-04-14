@@ -32,6 +32,10 @@ pub fn ingest_all(conn: &Connection) -> bool {
         Ok(done) => { if !done { all_done = false; } }
         Err(e) => eprintln!("OpenCode ingest error: {e}"),
     }
+    match ingest_kilo(conn) {
+        Ok(done) => { if !done { all_done = false; } }
+        Err(e) => eprintln!("Kilo ingest error: {e}"),
+    }
     if let Err(e) = prune_old_messages(conn) {
         eprintln!("Prune error: {e}");
     }
@@ -624,6 +628,148 @@ fn ingest_opencode(conn: &Connection) -> Result<bool, String> {
     Ok(true)
 }
 
+// ── Kilo ──────────────────────────────────────────────────
+
+fn ingest_kilo(conn: &Connection) -> Result<bool, String> {
+    let db_path = home_join(".local/share/kilo/kilo.db")?;
+    if !db_path.exists() {
+        return Ok(true);
+    }
+
+    let cursor_key = "kilo:message-db";
+    let meta = fs::metadata(&db_path).map_err(|e| e.to_string())?;
+    let file_size = meta.len() as i64;
+    let mtime = file_mtime(&meta);
+    let cursor = get_cursor(conn, cursor_key);
+
+    if let Some((size, _, last_mtime)) = cursor {
+        if size == file_size && last_mtime == mtime {
+            return Ok(true);
+        }
+    }
+
+    let source = Connection::open_with_flags(
+        &db_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ).map_err(|e| format!("Failed to open Kilo DB: {e}"))?;
+
+    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+    let (last_size, last_rowid, _) = cursor.unwrap_or((0, 0, 0));
+    let should_rebuild = last_rowid > 0 && file_size < last_size;
+
+    if should_rebuild {
+        conn.execute("DELETE FROM usage_messages WHERE provider = 'kilo'", [])
+            .map_err(|e| e.to_string())?;
+    }
+
+    let mut stmt = source.prepare(
+        "SELECT
+            m.rowid,
+            m.session_id,
+            s.directory,
+            m.time_created,
+            m.data
+         FROM message m
+         JOIN session s ON s.id = m.session_id
+         WHERE json_extract(m.data, '$.role') = 'assistant'
+           AND m.rowid > ?1
+         ORDER BY m.rowid ASC"
+    ).map_err(|e| format!("Failed to query Kilo DB: {e}"))?;
+
+    let start_rowid = if should_rebuild { 0 } else { last_rowid };
+    let rows = stmt.query_map(params![start_rowid], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, i64>(3)?,
+            row.get::<_, String>(4)?,
+        ))
+    }).map_err(|e| e.to_string())?;
+
+    let mut max_rowid = start_rowid;
+    for row in rows {
+        let (rowid, session_id, directory, time_created, data) = match row {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        max_rowid = rowid;
+        let payload: Value = match serde_json::from_str(&data) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        let model = payload
+            .get("modelID")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let pricing_provider = payload
+            .get("providerID")
+            .and_then(Value::as_str)
+            .unwrap_or("kilo");
+        let tokens = payload.get("tokens");
+        let input = tokens.and_then(|t| t.get("input")).and_then(Value::as_u64).unwrap_or(0);
+        let output = tokens.and_then(|t| t.get("output")).and_then(Value::as_u64).unwrap_or(0);
+        let thoughts = tokens.and_then(|t| t.get("reasoning")).and_then(Value::as_u64).unwrap_or(0);
+        let cache_read = tokens
+            .and_then(|t| t.get("cache"))
+            .and_then(|c| c.get("read"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let cache_write = tokens
+            .and_then(|t| t.get("cache"))
+            .and_then(|c| c.get("write"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let total = tokens
+            .and_then(|t| t.get("total"))
+            .and_then(Value::as_u64)
+            .unwrap_or(input + output + thoughts + cache_read + cache_write);
+        let recorded_cost = payload.get("cost").and_then(Value::as_f64);
+        let project = directory
+            .split('/')
+            .rfind(|segment| !segment.is_empty())
+            .unwrap_or("unknown")
+            .to_string();
+        let timestamp = payload
+            .get("time")
+            .and_then(|t| t.get("completed").or_else(|| t.get("created")))
+            .and_then(Value::as_i64)
+            .map(|ms| ms / 1000)
+            .unwrap_or(time_created / 1000);
+
+        conn.execute(
+            "INSERT INTO usage_messages (
+                provider, session_id, project, model, timestamp,
+                tokens_input, tokens_output, tokens_cache_write, tokens_cache_read,
+                tokens_thoughts, tokens_total, pricing_provider, recorded_cost
+             ) VALUES (
+                'kilo', ?1, ?2, ?3, ?4,
+                ?5, ?6, ?7, ?8,
+                ?9, ?10, ?11, ?12
+             )",
+            params![
+                session_id,
+                project,
+                model,
+                timestamp,
+                input as i64,
+                output as i64,
+                cache_write as i64,
+                cache_read as i64,
+                thoughts as i64,
+                total as i64,
+                pricing_provider,
+                recorded_cost,
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    upsert_cursor(conn, cursor_key, "kilo", file_size, max_rowid, mtime)?;
+    conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
 // ── Maintenance ───────────────────────────────────────────
 
 fn prune_old_messages(conn: &Connection) -> Result<(), String> {
@@ -635,13 +781,13 @@ fn prune_old_messages(conn: &Connection) -> Result<(), String> {
          SELECT provider, date(timestamp, 'unixepoch') as d, COALESCE(pricing_provider, provider), model, project,
                 SUM(tokens_input), SUM(tokens_output), SUM(tokens_cache_write), SUM(tokens_cache_read), SUM(tokens_thoughts), SUM(tokens_total), COUNT(*), SUM(recorded_cost)
          FROM usage_messages
-         WHERE timestamp < ?1 AND provider != 'opencode'
+         WHERE timestamp < ?1 AND provider NOT IN ('opencode', 'kilo')
          GROUP BY provider, d, COALESCE(pricing_provider, provider), model, project",
         params![cutoff],
     ).map_err(|e| e.to_string())?;
 
     conn.execute(
-        "DELETE FROM usage_messages WHERE timestamp < ?1 AND provider != 'opencode'",
+        "DELETE FROM usage_messages WHERE timestamp < ?1 AND provider NOT IN ('opencode', 'kilo')",
         params![cutoff],
     ).map_err(|e| e.to_string())?;
 

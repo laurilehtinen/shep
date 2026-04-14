@@ -15,6 +15,7 @@ import {
   TONE_COLORS,
   TONE_TRACK,
   barTone,
+  billingCycleRange,
   formatCost,
   formatPercent,
   formatReset,
@@ -23,7 +24,7 @@ import {
   computePace,
   paceLabel,
 } from "./usageHelpers";
-import type { UsageSettings, ProviderUsageSnapshot, UsageWindowSnapshot } from "../../lib/types";
+import type { UsageSettings, ProviderUsageSnapshot } from "../../lib/types";
 
 const TIME_WINDOWS: { key: TimeWindow; label: string }[] = [
   { key: "5h", label: "5 hour" },
@@ -404,9 +405,6 @@ function CustomBudgets({ snapshots, settings }: { snapshots: Record<string, Prov
   if (budgetProviders.length === 0) return null;
 
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const elapsedPct = Math.min(Math.max(((now.getTime() - monthStart.getTime()) / (nextMonth.getTime() - monthStart.getTime())) * 100, 0), 100);
 
   return (
     <>
@@ -414,7 +412,7 @@ function CustomBudgets({ snapshots, settings }: { snapshots: Record<string, Prov
       <section className="usage-section">
         <div className="usage-section__header">
           <h3 className="section-label !p-0">Monthly Budgets</h3>
-          <span className="usage-section__hint">Current month</span>
+          <span className="usage-section__hint">Billing cycle</span>
         </div>
         <div className="usage-limits">
           {budgetProviders.map((provider) => {
@@ -423,6 +421,8 @@ function CustomBudgets({ snapshots, settings }: { snapshots: Record<string, Prov
             const snap = snapshots[provider]!;
             const currentMonthCost = snap.localDetails!.costMonth!;
             const usedPct = Math.min((currentMonthCost / budget) * 100, 999);
+            const cycle = billingCycleRange(now, config.budgetCutoffDay);
+            const elapsedPct = Math.min(Math.max(((now.getTime() - cycle.start.getTime()) / (cycle.end.getTime() - cycle.start.getTime())) * 100, 0), 100);
             const delta = usedPct - elapsedPct;
             const paceStatus = delta <= -10 ? "under" : delta >= 10 ? "over" : "on";
             const tone = barTone({ status: paceStatus, elapsedPct }, usedPct);
@@ -473,13 +473,17 @@ function ProviderLimits({
 }) {
   if (window !== "5h" && window !== "7d") return null;
 
+  const findWindow = (snap: ProviderUsageSnapshot) =>
+    snap.summaryWindows.find((sw) => sw.window === window && sw.usedPercent != null && sw.sourceType === "provider")
+    ?? snap.summaryWindows.find((sw) => sw.window.startsWith("24h_") && sw.usedPercent != null && sw.sourceType === "provider");
+
+  // Rate Limits shows providers with provider API data. When a provider is enabled but the provider
+  // API failed (e.g., 429), surface the error so the section isn't silently empty.
   const providers = ALL_USAGE_PROVIDERS.filter((p) => {
     const snap = snapshots[p];
     if (!snap) return false;
-    // Rate Limits only shows providers with actual provider API data, not synthetic budget windows
-    const w = snap.summaryWindows.find((sw) => sw.window === window && sw.usedPercent != null && sw.sourceType === "provider")
-      ?? snap.summaryWindows.find((sw) => sw.window.startsWith("24h_") && sw.usedPercent != null && sw.sourceType === "provider");
-    return w?.usedPercent != null;
+    if (findWindow(snap)) return true;
+    return snap.error != null;
   });
 
   if (providers.length === 0) return null;
@@ -495,13 +499,30 @@ function ProviderLimits({
       <div className="usage-limits">
         {providers.map((provider) => {
           const snap = snapshots[provider]!;
-          const w = (snap.summaryWindows.find((sw) => sw.window === window && sw.usedPercent != null && sw.sourceType === "provider")
-            ?? snap.summaryWindows.find((sw) => sw.window.startsWith("24h_") && sw.usedPercent != null && sw.sourceType === "provider")) as UsageWindowSnapshot;
+          const w = findWindow(snap);
+          const logoSrc = assistantLogoSrc[provider];
+
+          if (!w) {
+            return (
+              <div key={provider} className="usage-limit">
+                <div className="usage-limit__header">
+                  <span className="usage-limit__provider">
+                    {logoSrc ? <img src={logoSrc} alt="" className={`usage-list__icon ${getAssistantLogoClass(provider) ?? ""}`} /> : null}
+                    {getProviderLabel(provider)}
+                  </span>
+                  <span className="usage-limit__pct" style={{ opacity: 0.6 }}>unavailable</span>
+                </div>
+                <div className="usage-limit__meta" style={{ opacity: 0.7 }}>
+                  <span>{snap.error}</span>
+                </div>
+              </div>
+            );
+          }
+
           const pct = w.usedPercent ?? 0;
           const remaining = w.remainingPercent;
           const pace = computePace(w);
           const tone = barTone(pace, w.usedPercent);
-          const logoSrc = assistantLogoSrc[provider];
 
           return (
             <div key={provider} className="usage-limit">
