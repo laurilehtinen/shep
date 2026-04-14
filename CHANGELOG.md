@@ -108,6 +108,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     if at least one provider actually needs a refresh, so a no-op forced
     refresh doesn't briefly block a concurrent automatic one.
 
+- **Surfaced errors include remaining backoff time.** The Rate Limits
+  section now appends `(auto-retry in 4m 12s)` to the cached error
+  whenever a provider is still inside its backoff window. Without this,
+  pressing Refresh during a 429 cooldown silently re-displayed the same
+  Anthropic message and made it look like the click did nothing — now the
+  countdown ticks down across clicks, making it obvious that the refresh
+  was deliberately skipped.
+  - `ProviderState::surfaced_error()` now takes `now: u64` and computes
+    the remainder of `cooldown_secs()`.
+  - New local `format_short_duration()` helper renders durations as
+    `"45s"` / `"2m"` / `"2m 30s"`.
+
 - **"Off" providers hidden from the New Session Launcher.** When a provider
   is toggled off in Settings (`usageSettings[provider].show === false`),
   its entry is removed entirely from the assistant picker in

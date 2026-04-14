@@ -87,11 +87,25 @@ impl ProviderState {
         !self.last_error_logged
     }
 
-    fn surfaced_error(&self) -> Option<String> {
-        if self.consecutive_errors > 0 && !self.last_error.is_empty() {
-            Some(self.last_error.clone())
+    /// Returns the cached error if one exists. When the provider is still
+    /// inside its error-backoff window, the message is augmented with how
+    /// long until the next API attempt is allowed — so a Refresh click
+    /// during the cooldown shows progress (the timer ticks down) instead
+    /// of re-displaying the same stale Anthropic message.
+    fn surfaced_error(&self, now: u64) -> Option<String> {
+        if self.consecutive_errors == 0 || self.last_error.is_empty() {
+            return None;
+        }
+        let retry_at = self.fetched_at.saturating_add(self.cooldown_secs());
+        let remaining = retry_at.saturating_sub(now);
+        if remaining > 0 {
+            Some(format!(
+                "{} (auto-retry in {})",
+                self.last_error,
+                format_short_duration(remaining),
+            ))
         } else {
-            None
+            Some(self.last_error.clone())
         }
     }
 
@@ -100,6 +114,16 @@ impl ProviderState {
     /// rate-limit window doesn't immediately re-hit the upstream API.
     fn should_force_refresh(&self, now: u64) -> bool {
         self.consecutive_errors == 0 || self.is_stale(now)
+    }
+}
+
+fn format_short_duration(secs: u64) -> String {
+    if secs >= 60 {
+        let m = secs / 60;
+        let s = secs % 60;
+        if s == 0 { format!("{m}m") } else { format!("{m}m {s}s") }
+    } else {
+        format!("{secs}s")
     }
 }
 
@@ -390,7 +414,7 @@ fn codex_snapshot(conn: &rusqlite::Connection, cutoff_day: u32) -> ProviderUsage
         Some(ProviderCacheData::Codex(w)) => Some(w.clone()),
         _ => None,
     };
-    let cached_error = cache.codex.surfaced_error();
+    let cached_error = cache.codex.surfaced_error(now_epoch_seconds());
     drop(cache);
 
     let mut summary_windows = Vec::new();
@@ -434,7 +458,7 @@ fn claude_snapshot(conn: &rusqlite::Connection, cutoff_day: u32) -> ProviderUsag
         Some(ProviderCacheData::Claude(p, e)) => Some((p.clone(), e.clone())),
         _ => None,
     };
-    let cached_error = cache.claude.surfaced_error();
+    let cached_error = cache.claude.surfaced_error(now_epoch_seconds());
     drop(cache);
 
     let mut summary_windows = Vec::new();
@@ -480,7 +504,7 @@ fn gemini_snapshot(conn: &rusqlite::Connection, cutoff_day: u32) -> ProviderUsag
         Some(ProviderCacheData::Gemini(w)) => Some(w.clone()),
         _ => None,
     };
-    let cached_error = cache.gemini.surfaced_error();
+    let cached_error = cache.gemini.surfaced_error(now_epoch_seconds());
     drop(cache);
 
     let mut summary_windows = Vec::new();
