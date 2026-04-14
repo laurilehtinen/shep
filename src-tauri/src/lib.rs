@@ -41,6 +41,10 @@ pub fn run() {
             // Start file system watcher for git status updates
             app.manage(GitWatcher::new(app.handle().clone()));
 
+            // Restore provider API cache (timestamps + last fetched windows)
+            // so a quick relaunch doesn't immediately re-hit upstream APIs.
+            usage::init_provider_cache_from_disk();
+
             // Kick off background usage ingestion so it doesn't block startup
             let db = app.state::<UsageDb>().inner().clone();
             let handle = app.handle().clone();

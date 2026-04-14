@@ -8,8 +8,12 @@ pub mod types;
 pub use db::UsageDb;
 pub use types::{LocalUsageDetails, ProviderUsageSnapshot, UsageOverview};
 
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+
+use serde::{Deserialize, Serialize};
+
 use types::UsageWindowSnapshot;
 use helpers::now_epoch_seconds;
 
@@ -22,11 +26,13 @@ const COOLDOWN_ERROR_BASE_SECS: u64 = 30;
 /// Maximum cooldown after repeated failures (caps the exponential backoff).
 const COOLDOWN_ERROR_MAX_SECS: u64 = 300; // 5 minutes
 
+#[derive(Serialize, Deserialize)]
 struct ProviderState {
     cache: Option<ProviderCacheData>,
     fetched_at: u64,
     consecutive_errors: u32,
     last_error: String,
+    #[serde(skip)]
     last_error_logged: bool,
 }
 
@@ -88,14 +94,23 @@ impl ProviderState {
             None
         }
     }
+
+    /// True if a forced refresh should actually call the API. Force ignores
+    /// the success TTL but still honors error backoff so a click during a
+    /// rate-limit window doesn't immediately re-hit the upstream API.
+    fn should_force_refresh(&self, now: u64) -> bool {
+        self.consecutive_errors == 0 || self.is_stale(now)
+    }
 }
 
+#[derive(Serialize, Deserialize)]
 enum ProviderCacheData {
     Claude(Vec<UsageWindowSnapshot>, Vec<UsageWindowSnapshot>),
     Codex(Vec<UsageWindowSnapshot>),
     Gemini(Vec<UsageWindowSnapshot>),
 }
 
+#[derive(Serialize, Deserialize)]
 struct ProviderCache {
     claude: ProviderState,
     codex: ProviderState,
@@ -240,13 +255,28 @@ fn spawn_provider_refresh(enabled: &EnabledProviders) {
 }
 
 /// Force-refresh provider API caches for enabled providers, bypassing the
-/// staleness TTL. Blocks the current thread. Skips silently if another
-/// refresh is already running so we don't stack a second API call on top.
+/// success TTL. Still honors per-provider error backoff: if a provider is in
+/// a cooldown window after a recent failure (e.g. a 429), it is skipped so
+/// repeated Refresh clicks can't keep hammering an already-rate-limited API.
+/// Skips silently if another refresh is already running so we don't stack a
+/// second API call on top.
 pub fn force_refresh_providers(enabled: &EnabledProviders) {
+    let now = now_epoch_seconds();
+    let (do_claude, do_codex, do_gemini) = {
+        let cache = PROVIDER_CACHE.lock().unwrap();
+        (
+            enabled.claude && cache.claude.should_force_refresh(now),
+            enabled.codex && cache.codex.should_force_refresh(now),
+            enabled.gemini && cache.gemini.should_force_refresh(now),
+        )
+    };
+    if !do_claude && !do_codex && !do_gemini {
+        return;
+    }
     if PROVIDER_REFRESH_RUNNING.swap(true, Ordering::SeqCst) {
         return;
     }
-    refresh_provider_cache_sync(enabled.claude, enabled.codex, enabled.gemini);
+    refresh_provider_cache_sync(do_claude, do_codex, do_gemini);
     PROVIDER_REFRESH_RUNNING.store(false, Ordering::SeqCst);
 }
 
@@ -307,6 +337,49 @@ fn refresh_provider_cache_sync(do_claude: bool, do_codex: bool, do_gemini: bool)
             }
         }
     }
+
+    save_provider_cache_to_disk();
+}
+
+fn cache_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".shep").join("provider_cache.json"))
+}
+
+/// Restore provider cache state from disk. Called once at app startup so a
+/// quick relaunch doesn't reset `fetched_at` to 0 and immediately re-hit
+/// the provider APIs (which previously cost an API call per restart and
+/// could trip Anthropic's rate limit during dev iteration).
+pub fn init_provider_cache_from_disk() {
+    let Some(path) = cache_path() else { return };
+    let Ok(bytes) = std::fs::read(&path) else { return };
+    match serde_json::from_slice::<ProviderCache>(&bytes) {
+        Ok(loaded) => {
+            let mut cache = PROVIDER_CACHE.lock().unwrap();
+            *cache = loaded;
+        }
+        Err(e) => {
+            eprintln!("Failed to deserialize provider cache ({e}), starting fresh");
+        }
+    }
+}
+
+/// Atomically persist the in-memory provider cache. Best-effort: failures
+/// are silent because losing the cache only costs one extra API call.
+fn save_provider_cache_to_disk() {
+    let Some(path) = cache_path() else { return };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let serialized = {
+        let cache = PROVIDER_CACHE.lock().unwrap();
+        serde_json::to_vec_pretty(&*cache)
+    };
+    let Ok(bytes) = serialized else { return };
+    let tmp = path.with_extension("json.tmp");
+    if std::fs::write(&tmp, &bytes).is_err() {
+        return;
+    }
+    let _ = std::fs::rename(&tmp, &path);
 }
 
 fn codex_snapshot(conn: &rusqlite::Connection, cutoff_day: u32) -> ProviderUsageSnapshot {

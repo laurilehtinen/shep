@@ -74,7 +74,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - New `ProviderState::surfaced_error()` helper exposes the cached error to
     snapshot rendering.
 
+- **Provider API cache persisted across app restarts.** The in-memory
+  `PROVIDER_CACHE` (Claude / Codex / Gemini fetch timestamps, last fetched
+  windows, and error backoff state) is now written to
+  `~/.shep/provider_cache.json` after every refresh and restored on startup.
+  Previously every relaunch reset `fetched_at = 0`, which made `is_stale`
+  return true immediately and forced a fresh API call — repeated quick
+  restarts (e.g. during `pnpm tauri dev` rebuilds) could trip Anthropic's
+  rate limit on the usage endpoint.
+  - New `init_provider_cache_from_disk()` (called from `lib.rs` setup) and
+    `save_provider_cache_to_disk()` (called at the end of
+    `refresh_provider_cache_sync`) in `src-tauri/src/usage/mod.rs`.
+  - Atomic write via tmp-file + rename so a crash mid-save can't corrupt
+    the persisted state.
+  - `UsageWindowSnapshot`, `ProviderState`, `ProviderCacheData`, and
+    `ProviderCache` gain `Deserialize` derives. `last_error_logged` is
+    `#[serde(skip)]` so the "did we already log this error?" flag resets on
+    reload — the next encounter is logged even if the message matches a
+    prior session.
+
 ### Changed
+
+- **Force refresh now honors per-provider error backoff.**
+  `force_refresh_providers()` previously bypassed the success TTL *and* the
+  exponential error backoff, meaning a Refresh click during an active
+  rate-limit window immediately re-hit the API and got rate-limited again.
+  It now bypasses only the success TTL: providers with `consecutive_errors
+  > 0` are skipped while inside their `cooldown_secs()` window, and the
+  cached error keeps surfacing in the Rate Limits section.
+  - New `ProviderState::should_force_refresh(now)` helper:
+    `consecutive_errors == 0 || self.is_stale(now)`.
+  - The single-flight `PROVIDER_REFRESH_RUNNING` guard is now only acquired
+    if at least one provider actually needs a refresh, so a no-op forced
+    refresh doesn't briefly block a concurrent automatic one.
 
 - **"Off" providers hidden from the New Session Launcher.** When a provider
   is toggled off in Settings (`usageSettings[provider].show === false`),
@@ -127,5 +159,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - New helpers `enabled_from()` and `cutoffs_from()` in `commands.rs` pull
   enabled flags and per-provider cutoffs out of persisted settings for use
   in snapshot/ingest paths.
+- New on-disk file `~/.shep/provider_cache.json` for provider API cache
+  persistence (alongside the existing `~/.shep/usage.sqlite3`).
 
 [Unreleased]: https://github.com/laurilehtinen/shep/tree/sun-shep
