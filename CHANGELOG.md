@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **BBEdit editor support.** [BBEdit](https://www.barebones.com/products/bbedit/)
+  joins VS Code, Zed, Cursor, and Sublime Text as a selectable editor in
+  Settings. "Open in Editor" uses `open -a BBEdit <path>` on macOS. Logo is
+  a typographic "BB" monogram with the `themed-mono-logo` treatment so it
+  adapts to light/dark themes.
+
 - **Kilo provider support.** Kilo ([kilo.ai/cli](https://kilo.ai/cli)) is now a
   fully integrated fifth assistant alongside Claude, Codex, Gemini, and
   OpenCode. Includes session launching, a sidebar tab, a `kilo.svg` logo, a
@@ -70,17 +76,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **Provider icons hidden when a provider is "Off".** When a provider is
-  toggled off in Settings (`usageSettings[provider].show === false`), its
-  logo is suppressed in:
-  - the New Session Launcher assistant picker
-    (`src/components/session/SessionLauncher.tsx`), and
-  - the sidebar assistant tabs for already-running sessions
-    (`src/components/sidebar/AssistantButton.tsx`).
-
-  The buttons/tabs themselves remain interactive — only the icon is hidden.
-  The "Off" state is the same toggle used by Settings Panel and Sidebar Usage
-  filtering.
+- **"Off" providers hidden from the New Session Launcher.** When a provider
+  is toggled off in Settings (`usageSettings[provider].show === false`),
+  its entry is removed entirely from the assistant picker in
+  `src/components/session/SessionLauncher.tsx` — no button, no icon, no
+  greyed-out slot. Running sessions for that provider keep their sidebar
+  tab, but the provider logo is suppressed on that tab
+  (`src/components/sidebar/AssistantButton.tsx`) so the UI doesn't advertise
+  a provider the user has explicitly hidden. The "Off" state is the same
+  toggle used by the Settings Panel and Sidebar Usage filtering.
 
 - **Monthly budget calculation uses the full monthly budget regardless of the
   selected time window.** `syntheticBudgetWindow()` no longer prorates the

@@ -71,10 +71,11 @@ export default function SessionLauncher({ onStartSession }: SessionLauncherProps
       <div className="mb-6">
         <label className="section-label !p-0 mb-3 block text-xs opacity-50">Assistant</label>
         <div className="flex flex-wrap gap-2">
-          {CODING_ASSISTANTS.map((assistant) => {
+          {CODING_ASSISTANTS
+            .filter((assistant) => usageSettings[assistant.id as UsageProvider]?.show !== false)
+            .map((assistant) => {
             const logoUrl = assistantLogoSrc[assistant.id];
             const isAvailable = available[assistant.id] !== false;
-            const providerOff = usageSettings[assistant.id as UsageProvider]?.show === false;
             const logoClassName = [getAssistantLogoClass(assistant.id), !isAvailable ? "logo-unavailable" : null]
               .filter(Boolean)
               .join(" ");
@@ -94,7 +95,7 @@ export default function SessionLauncher({ onStartSession }: SessionLauncherProps
                     }
                   }}
                 >
-                  {logoUrl && !providerOff && <img src={logoUrl} alt="" width={18} height={18} className={logoClassName || undefined} />}
+                  {logoUrl && <img src={logoUrl} alt="" width={18} height={18} className={logoClassName || undefined} />}
                   <span>{assistant.name}</span>
                 </button>
                 {showPopover && installUrl && (

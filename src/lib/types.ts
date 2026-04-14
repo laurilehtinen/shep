@@ -24,7 +24,7 @@ export interface RegisteredRepo {
   workspace: WorkspaceConfig;
 }
 
-export type PreferredEditor = "vscode" | "zed" | "cursor" | "sublime_text";
+export type PreferredEditor = "vscode" | "zed" | "cursor" | "sublime_text" | "bbedit";
 
 export interface EditorSettings {
   preferredEditor: PreferredEditor | null;

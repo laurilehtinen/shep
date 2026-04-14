@@ -580,6 +580,7 @@ fn editor_app_name(editor_id: &str) -> Option<&'static str> {
         "zed" => Some("Zed"),
         "cursor" => Some("Cursor"),
         "sublime_text" => Some("Sublime Text"),
+        "bbedit" => Some("BBEdit"),
         _ => None,
     }
 }
