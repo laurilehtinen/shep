@@ -81,7 +81,7 @@ export type SessionMode = "standard" | "yolo";
 
 // ── Unified tab model ──────────────────────────────────────────────
 
-export type PanelTabKind = "git" | "commands" | "launcher";
+export type PanelTabKind = "git" | "commands" | "agents" | "launcher";
 export type TabKind = "terminal" | "assistant" | PanelTabKind;
 
 interface TabBase {
@@ -112,6 +112,7 @@ export function panelTabId(kind: PanelTabKind): string {
 export const panelTabDefaults: Record<PanelTabKind, { label: string }> = {
   git: { label: "Files" },
   commands: { label: "Commands" },
+  agents: { label: "AGENTS.md" },
   launcher: { label: "New Agent" },
 };
 

@@ -38,6 +38,7 @@ const EMPTY_COMMANDS: CommandState[] = [];
 const SettingsPanel = lazy(() => import("../settings/SettingsPanel"));
 const GitPanel = lazy(() => import("../git/GitPanel"));
 const CommandsPanel = lazy(() => import("../commands/CommandsPanel"));
+const AgentsPanel = lazy(() => import("../agents/AgentsPanel"));
 const SessionLauncher = lazy(() => import("../session/SessionLauncher"));
 const UsagePanel = lazy(() => import("../usage/UsagePanel"));
 const PortsPanel = lazy(() => import("../ports/PortsPanel"));
@@ -617,6 +618,11 @@ export default function AppShell() {
                   onStartAllCommands={handleStartAllCommands}
                   onStopAllCommands={handleStopAllCommands}
                 />
+              </Suspense>
+            )}
+            {!showOverlay && activeTab?.kind === "agents" && (
+              <Suspense fallback={<PanelLoader />}>
+                <AgentsPanel />
               </Suspense>
             )}
             {!showOverlay && activeTab?.kind === "launcher" && (

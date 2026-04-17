@@ -12,6 +12,7 @@ import FileList from "./FileList";
 import FileTree from "./FileTree";
 import DiffViewer from "./DiffViewer";
 import FileViewer from "./FileViewer";
+import GitInitPanel from "./GitInitPanel";
 import { useNoticeStore } from "../../stores/useNoticeStore";
 import { getErrorMessage } from "../../lib/errors";
 
@@ -404,11 +405,7 @@ export default function GitPanel() {
   }
 
   if (!gitStatus?.is_git_repo) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center opacity-50">
-        Not a git repository
-      </div>
-    );
+    return <GitInitPanel repoPath={activeProjectPath} />;
   }
 
   return (

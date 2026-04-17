@@ -5,6 +5,7 @@ use tauri::ipc::Channel;
 use tauri::{Emitter, State};
 use url::Url;
 
+use crate::agents;
 use crate::fonts::{self, FontFaceData, FontFamily};
 use crate::git;
 use crate::git::{ChangedFile, CreatedWorktree, GitStatus, WorktreeEntry};
@@ -356,6 +357,18 @@ pub async fn git_switch_branch(path: String, branch_name: String) -> Result<(), 
 #[tauri::command]
 pub async fn git_create_branch(path: String, branch_name: String) -> Result<(), String> {
     git::create_branch(&path, &branch_name)
+}
+
+// ── AGENTS.md editor ───────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn read_agents_file(repo_path: String) -> Result<String, String> {
+    agents::read_agents(&repo_path)
+}
+
+#[tauri::command]
+pub async fn write_agents_file(repo_path: String, contents: String) -> Result<(), String> {
+    agents::write_agents(&repo_path, &contents)
 }
 
 // ── System commands ────────────────────────────────────────────────

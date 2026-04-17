@@ -15,10 +15,11 @@ export default function GitStatusRow({ repoPath }: GitStatusRowProps) {
     return s.projectState[path]?.activeTabId === panelTabId("git");
   });
 
-  if (!status?.is_git_repo) return null;
-
-  const changeCount = status.staged + status.unstaged + status.untracked;
-  const label = status.branch && status.branch !== "(detached)" ? status.branch : "Files";
+  const isGitRepo = !!status?.is_git_repo;
+  const changeCount = isGitRepo ? status.staged + status.unstaged + status.untracked : 0;
+  const label = isGitRepo
+    ? (status.branch && status.branch !== "(detached)" ? status.branch : "Files")
+    : "Files";
 
   return (
     <button
@@ -30,14 +31,14 @@ export default function GitStatusRow({ repoPath }: GitStatusRowProps) {
       {changeCount > 0 && (
         <span className="badge">{changeCount}</span>
       )}
-      {(status.ahead > 0 || status.behind > 0) && (
+      {isGitRepo && (status.ahead > 0 || status.behind > 0) && (
         <span className="badge">
           {status.ahead > 0 && `↑${status.ahead}`}
           {status.ahead > 0 && status.behind > 0 && " "}
           {status.behind > 0 && `↓${status.behind}`}
         </span>
       )}
-      {status.dirty && <span className="sidebar-status-dot sidebar-status-dot--attention" />}
+      {isGitRepo && status.dirty && <span className="sidebar-status-dot sidebar-status-dot--attention" />}
     </button>
   );
 }

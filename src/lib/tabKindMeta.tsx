@@ -1,4 +1,4 @@
-import { FolderTree, Terminal, SquareTerminal, List, ExternalLink } from "lucide-react";
+import { FolderTree, Terminal, SquareTerminal, List, ExternalLink, Bot } from "lucide-react";
 import type { TabKind } from "./types";
 
 export interface TabKindMeta {
@@ -27,6 +27,10 @@ const meta: Record<TabKind, TabKindMeta> = {
     label: "Files",
     icon: (size) => <FolderTree size={size} />,
     shortcut: "⌘G",
+  },
+  agents: {
+    label: "AGENTS.md",
+    icon: (size) => <Bot size={size} />,
   },
   launcher: {
     label: "New Agent",

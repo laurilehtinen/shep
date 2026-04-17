@@ -2248,6 +2248,32 @@ select {
   padding-top: 48px;
 }
 
+.agents-editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 14px 18px;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  scrollbar-color: rgba(185, 208, 255, 0.24) transparent;
+}
+.agents-editor::placeholder {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+.agents-editor:focus {
+  outline: none;
+}
+
 .markdown-view__content {
   max-width: 860px;
   padding: 10px 24px 28px;

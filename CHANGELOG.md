@@ -10,6 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **AGENTS.md editor.** Each project now has an "AGENTS.md" entry in the
+  sidebar (between "Commands" and "Files") that opens a lightweight
+  monospace text editor in the main panel. Edits auto-save 800 ms after
+  the last keystroke; Cmd/Ctrl+S flushes immediately. A small status pill
+  in the header shows "Unsaved changes…", "Saving…", "Saved", or "Save
+  failed".
+  - **CLAUDE.md symlink is created automatically.** On the first save of
+    `AGENTS.md`, if `CLAUDE.md` does not exist, Shep creates a relative
+    symlink `CLAUDE.md → AGENTS.md` so Claude Code and any other
+    AGENTS.md-aware assistants share the same file. An existing
+    `CLAUDE.md` (regular file or any symlink, including broken ones) is
+    never touched — Shep won't overwrite user-owned content.
+  - Backend adds `read_agents_file` / `write_agents_file` Tauri commands
+    and a new `agents.rs` module. Symlink creation uses
+    `std::os::unix::fs::symlink` on Unix and `symlink_file` on Windows;
+    failure is non-fatal (the save still succeeds).
+
+- **Initialize git from the Files panel.** Projects that aren't yet git
+  repositories now show an "Initialize repository" form inside the Files tab
+  instead of a dead-end "Not a git repository" message. Enter a commit
+  message (defaults to "Initial commit") and the panel runs
+  `git init -b main` → `git add -A` → `git commit -m <message>` in
+  sequence, with per-step error notices if any stage fails. A secondary
+  "Initialize without committing" action runs just `git init` for users who
+  want an empty repo. The sidebar "Files" row is now also visible for
+  non-git projects so the panel is discoverable.
+
 - **BBEdit editor support.** [BBEdit](https://www.barebones.com/products/bbedit/)
   joins VS Code, Zed, Cursor, and Sublime Text as a selectable editor in
   Settings. "Open in Editor" uses `open -a BBEdit <path>` on macOS. Logo is

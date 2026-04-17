@@ -1,3 +1,4 @@
+mod agents;
 mod commands;
 mod fonts;
 mod git;
@@ -139,6 +140,8 @@ pub fn run() {
             commands::list_listening_ports,
             commands::kill_port,
             commands::open_url,
+            commands::read_agents_file,
+            commands::write_agents_file,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

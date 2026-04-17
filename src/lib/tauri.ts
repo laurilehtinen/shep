@@ -207,12 +207,34 @@ export function gitListFiles(path: string): Promise<string[]> {
   return invoke("git_list_files", { path });
 }
 
+export function gitStageAll(path: string): Promise<void> {
+  return invoke("git_stage_all", { path });
+}
+
+export function gitCommit(path: string, message: string): Promise<void> {
+  return invoke("git_commit", { path, message });
+}
+
 export function gitSwitchBranch(path: string, branchName: string): Promise<void> {
   return invoke("git_switch_branch", { path, branchName });
 }
 
 export function gitCreateBranch(path: string, branchName: string): Promise<void> {
   return invoke("git_create_branch", { path, branchName });
+}
+
+// ── AGENTS.md editor ──────────────────────────────────────────────
+
+/** Read AGENTS.md from a project. Returns "" if the file doesn't exist. */
+export function readAgentsFile(repoPath: string): Promise<string> {
+  return invoke("read_agents_file", { repoPath });
+}
+
+/** Write AGENTS.md for a project. Also creates a CLAUDE.md -> AGENTS.md
+ *  symlink if CLAUDE.md doesn't already exist. An existing CLAUDE.md
+ *  (file or symlink) is left untouched. */
+export function writeAgentsFile(repoPath: string, contents: string): Promise<void> {
+  return invoke("write_agents_file", { repoPath, contents });
 }
 
 // ── System commands ────────────────────────────────────────────────

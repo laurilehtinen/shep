@@ -9,6 +9,7 @@ import CollapsibleSection from "./CollapsibleSection";
 import AssistantList from "./AssistantList";
 import TerminalList from "./TerminalList";
 import CommandsRow from "./CommandsRow";
+import AgentsRow from "./AgentsRow";
 import GitStatusRow from "./GitStatusRow";
 
 interface ProjectListProps {
@@ -164,6 +165,7 @@ export default function ProjectList({
                 </CollapsibleSection>
 
                 <CommandsRow badge={commandsBadge} />
+                <AgentsRow />
                 <GitStatusRow repoPath={repo.path} />
               </div>
             )}
