@@ -241,23 +241,32 @@ export default function FileViewer({
         borderBottom: "1px solid rgba(255,255,255,0.08)",
         fontSize: 11,
         opacity: 0.85,
+        // Reserve space on the right so the absolutely-positioned
+        // Files/Diffs toggle doesn't overlap our buttons.
+        paddingRight: 180,
       }}
     >
-      <span
-        style={{ fontFamily: '"SF Mono", "Fira Code", monospace', opacity: 0.75 }}
-      >
-        {filePath}
-      </span>
-      <span style={{ flex: 1 }} />
-      <StatusPill status={saveStatus} />
       {editing ? (
-        <button
-          className="icon-btn"
-          title="Done editing (Esc)"
-          onClick={handleExitEdit}
-        >
-          <Check size={13} />
-        </button>
+        <>
+          <button
+            className="icon-btn"
+            title="Done editing (Esc)"
+            onClick={handleExitEdit}
+          >
+            <Check size={13} />
+          </button>
+          <button
+            className="icon-btn"
+            title="Discard changes since last save (Esc)"
+            onClick={() => {
+              setDraft(lastSavedRef.current);
+              setSaveStatus("idle");
+              setEditing(false);
+            }}
+          >
+            <X size={13} />
+          </button>
+        </>
       ) : (
         <button
           className="icon-btn"
@@ -267,19 +276,19 @@ export default function FileViewer({
           <Pencil size={13} />
         </button>
       )}
-      {editing && (
-        <button
-          className="icon-btn"
-          title="Discard changes since last save (Esc)"
-          onClick={() => {
-            setDraft(lastSavedRef.current);
-            setSaveStatus("idle");
-            setEditing(false);
-          }}
-        >
-          <X size={13} />
-        </button>
-      )}
+      <span
+        style={{
+          fontFamily: '"SF Mono", "Fira Code", monospace',
+          opacity: 0.75,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          minWidth: 0,
+        }}
+      >
+        {filePath}
+      </span>
+      <StatusPill status={saveStatus} />
     </div>
   ) : null;
 
