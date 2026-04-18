@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   user has already staged specific files via terminal). Uses the existing
   `git_stage_all` + `git_commit` Tauri commands.
 
+### Changed
+
+- **Push button disables when there is nothing to push.** Mirrors the Pull
+  button's behaviour: when `ahead === 0` the Push button is rendered
+  disabled instead of triggering a no-op `git push`.
+
 ### Fixed
 
 - **Push/pull now respect the branch's configured upstream remote.** The

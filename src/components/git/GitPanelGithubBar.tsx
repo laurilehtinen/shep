@@ -175,7 +175,7 @@ export default function GitPanelGithubBar({ repoPath, status, onOpenPublish, onO
 
         <button
           className="option-card option-card--compact"
-          disabled={!hasAnyRemote || busy !== null || !status.branch}
+          disabled={!hasAnyRemote || status.ahead === 0 || busy !== null || !status.branch}
           onClick={() => void handlePush()}
           title={status.ahead > 0 ? `git push (${status.ahead} ahead)` : "Nothing to push"}
         >
