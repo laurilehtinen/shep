@@ -13,6 +13,9 @@ import FileTree from "./FileTree";
 import DiffViewer from "./DiffViewer";
 import FileViewer from "./FileViewer";
 import GitInitPanel from "./GitInitPanel";
+import GitPanelGithubBar from "./GitPanelGithubBar";
+import PublishToGitHubDialog from "./PublishToGitHubDialog";
+import CommitDialog from "./CommitDialog";
 import { useNoticeStore } from "../../stores/useNoticeStore";
 import { getErrorMessage } from "../../lib/errors";
 
@@ -53,6 +56,9 @@ export default function GitPanel() {
     const stored = localStorage.getItem(PANEL_MODE_KEY);
     return stored === "files" || stored === "repo" ? "files" : "diffs";
   });
+
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [commitOpen, setCommitOpen] = useState(false);
 
   // A single unified search term (`leftSearch`, persisted in the panel
   // store) drives both the sidebar file filter AND the in-viewer
@@ -410,6 +416,25 @@ export default function GitPanel() {
 
   return (
     <div className="git-panel">
+      <GitPanelGithubBar
+        repoPath={activeProjectPath}
+        status={gitStatus}
+        onOpenPublish={() => setPublishOpen(true)}
+        onOpenCommit={() => setCommitOpen(true)}
+      />
+      {publishOpen && (
+        <PublishToGitHubDialog
+          repoPath={activeProjectPath}
+          onClose={() => setPublishOpen(false)}
+        />
+      )}
+      {commitOpen && (
+        <CommitDialog
+          repoPath={activeProjectPath}
+          status={gitStatus}
+          onClose={() => setCommitOpen(false)}
+        />
+      )}
       <div className="git-panel__body">
         {!sidebarCollapsed && (
           <div className="git-panel__sidebar">

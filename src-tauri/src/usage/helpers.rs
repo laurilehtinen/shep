@@ -7,6 +7,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
+    run_command_with_timeout(program, args, COMMAND_TIMEOUT)
+}
+
+pub fn run_command_with_timeout(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> Result<String, String> {
     let mut child = Command::new(program)
         .args(args)
         .stdout(std::process::Stdio::piped())
@@ -32,9 +40,9 @@ pub fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
                     .map_err(|e| format!("Invalid UTF-8 from {program}: {e}"));
             }
             Ok(None) => {
-                if start.elapsed() > COMMAND_TIMEOUT {
+                if start.elapsed() > timeout {
                     let _ = child.kill();
-                    return Err(format!("{program} timed out after {}s", COMMAND_TIMEOUT.as_secs()));
+                    return Err(format!("{program} timed out after {}s", timeout.as_secs()));
                 }
                 std::thread::sleep(Duration::from_millis(100));
             }

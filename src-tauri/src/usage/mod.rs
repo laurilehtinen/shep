@@ -1,5 +1,5 @@
 pub mod db;
-mod helpers;
+pub mod helpers;
 pub mod ingest;
 mod providers;
 mod queries;

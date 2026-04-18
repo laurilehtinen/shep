@@ -2,6 +2,7 @@ mod agents;
 mod commands;
 mod fonts;
 mod git;
+mod github;
 mod menu;
 mod pty;
 mod usage;
@@ -112,6 +113,16 @@ pub fn run() {
             commands::git_current_branch,
             commands::git_list_branches,
             commands::git_push_branch,
+            commands::git_fetch,
+            commands::git_pull,
+            commands::git_has_head_commit,
+            commands::github_auth_status,
+            commands::github_auth_login,
+            commands::github_auth_logout,
+            commands::github_setup_git,
+            commands::github_list_orgs,
+            commands::github_list_remotes,
+            commands::github_publish_repo,
             commands::git_list_worktrees,
             commands::git_create_worktree,
             commands::git_status,

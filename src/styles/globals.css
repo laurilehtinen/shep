@@ -2101,6 +2101,41 @@ select {
 }
 
 
+.git-panel__github-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--glass-border);
+  min-height: 36px;
+}
+
+.git-panel__github-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.git-panel__github-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.publish-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.publish-dialog__label {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
 .git-panel__body {
   display: flex;
   flex: 1;

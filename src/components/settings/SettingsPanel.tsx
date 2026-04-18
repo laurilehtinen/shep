@@ -10,6 +10,7 @@ import { useKeybindingStore } from "../../stores/useKeybindingStore";
 import { useTerminalSettingsStore } from "../../stores/useTerminalSettingsStore";
 import { useUsageSettingsStore } from "../../stores/useUsageSettingsStore";
 import { useUpdateStore } from "../../stores/useUpdateStore";
+import { useGithubStore } from "../../stores/useGithubStore";
 import { assistantLogoSrc, getAssistantLogoClass } from "../../lib/assistantLogos";
 import {
   FONT_SIZE_OPTIONS,
@@ -96,12 +97,23 @@ export default function SettingsPanel() {
   const downloadAndInstall = useUpdateStore((s) => s.downloadAndInstall);
   const restartApp = useUpdateStore((s) => s.restartApp);
 
+  const ghStatus = useGithubStore((s) => s.status);
+  const ghLoading = useGithubStore((s) => s.loading);
+  const ghError = useGithubStore((s) => s.error);
+  const ghSignInPhase = useGithubStore((s) => s.signInPhase);
+  const ghOneTimeCode = useGithubStore((s) => s.oneTimeCode);
+  const ghRefresh = useGithubStore((s) => s.refresh);
+  const ghSignIn = useGithubStore((s) => s.signIn);
+  const ghLogout = useGithubStore((s) => s.logout);
+  const ghResetSignIn = useGithubStore((s) => s.resetSignIn);
+
   useEffect(() => {
     if (!hasLoaded) void loadSettings();
     if (!kbHasLoaded) void loadKbSettings();
     if (!termHasLoaded) void loadTermSettings();
     if (!usageHasLoaded) void loadUsageSettings();
-  }, [hasLoaded, loadSettings, kbHasLoaded, loadKbSettings, termHasLoaded, loadTermSettings, usageHasLoaded, loadUsageSettings]);
+    if (!ghStatus) void ghRefresh();
+  }, [hasLoaded, loadSettings, kbHasLoaded, loadKbSettings, termHasLoaded, loadTermSettings, usageHasLoaded, loadUsageSettings, ghStatus, ghRefresh]);
 
   useEffect(() => {
     let cancelled = false;
@@ -609,6 +621,141 @@ export default function SettingsPanel() {
       <p className="text-xs text-[var(--text-muted)] mt-6">
         Settings are saved to ~/.shep/config.yml
       </p>
+
+      <hr className="settings-divider" />
+
+      {/* ── GitHub ─────────────────────────────────────────── */}
+      <h2 className="section-label !p-0 mb-4">GitHub</h2>
+
+      {ghStatus && !ghStatus.installed && (
+        <div className="settings-meta-grid mb-4">
+          <div className="text-sm text-[var(--text-secondary)]">
+            GitHub CLI (<code>gh</code>) is not installed. Install it to sign in and
+            publish repositories.
+          </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              className="option-card option-card--compact"
+              onClick={() => import("../../lib/tauri").then((m) => m.openUrl("https://cli.github.com/"))}
+            >
+              Install instructions
+            </button>
+          </div>
+        </div>
+      )}
+
+      {ghStatus && ghStatus.installed && !ghStatus.logged_in && ghSignInPhase === "idle" && (
+        <div className="settings-meta-grid mb-4">
+          <div className="settings-meta-row">
+            <span className="settings-meta-row__label">Status</span>
+            <span>Not signed in</span>
+          </div>
+          {ghStatus.version && (
+            <div className="settings-meta-row">
+              <span className="settings-meta-row__label">CLI</span>
+              <span>{ghStatus.version}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button className="btn-primary" onClick={() => void ghSignIn()}>
+              Sign in to GitHub
+            </button>
+            <button className="option-card option-card--compact" onClick={() => void ghRefresh()}>
+              Refresh
+            </button>
+          </div>
+        </div>
+      )}
+
+      {ghSignInPhase === "waiting" && (
+        <div className="settings-meta-grid mb-4" style={{ border: "1px solid rgba(122,162,247,0.3)", borderRadius: 8, padding: 12 }}>
+          <div className="text-sm text-[var(--text-secondary)] mb-1">
+            Signing in to GitHub...
+          </div>
+          {ghOneTimeCode ? (
+            <>
+              <div className="text-xs text-[var(--text-muted)] mb-1">One-time code (copied to clipboard):</div>
+              <div className="font-mono text-xl tracking-widest select-all" style={{ fontFeatureSettings: '"tnum"' }}>
+                {ghOneTimeCode}
+              </div>
+              <div className="text-xs text-[var(--text-muted)] mt-2">
+                Paste the code in the browser tab that opened. Complete the flow and return here.
+              </div>
+            </>
+          ) : (
+            <div className="text-xs text-[var(--text-muted)]">Waiting for GitHub CLI to start...</div>
+          )}
+        </div>
+      )}
+
+      {ghSignInPhase === "complete" && ghStatus?.logged_in && (
+        <div className="settings-meta-grid mb-4">
+          <div className="settings-meta-row">
+            <span className="settings-meta-row__label">Signed in as</span>
+            <span>{ghStatus.username}</span>
+          </div>
+          {ghStatus.scopes.length > 0 && (
+            <div className="settings-meta-row">
+              <span className="settings-meta-row__label">Scopes</span>
+              <span className="text-xs">{ghStatus.scopes.join(", ")}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button className="option-card option-card--compact" onClick={() => void ghLogout()}>
+              Sign out
+            </button>
+            <button className="option-card option-card--compact" onClick={() => ghResetSignIn()}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {ghSignInPhase === "idle" && ghStatus?.logged_in && (
+        <div className="settings-meta-grid mb-4">
+          <div className="settings-meta-row">
+            <span className="settings-meta-row__label">Signed in as</span>
+            <span>{ghStatus.username}</span>
+          </div>
+          {ghStatus.hostname && (
+            <div className="settings-meta-row">
+              <span className="settings-meta-row__label">Host</span>
+              <span>{ghStatus.hostname}</span>
+            </div>
+          )}
+          {ghStatus.scopes.length > 0 && (
+            <div className="settings-meta-row">
+              <span className="settings-meta-row__label">Scopes</span>
+              <span className="text-xs">{ghStatus.scopes.join(", ")}</span>
+            </div>
+          )}
+          {ghStatus.token_source && (
+            <div className="settings-meta-row">
+              <span className="settings-meta-row__label">Token</span>
+              <span className="text-xs">{ghStatus.token_source}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button className="option-card option-card--compact" onClick={() => void ghLogout()}>
+              Sign out
+            </button>
+            <button className="option-card option-card--compact" onClick={() => void ghRefresh()}>
+              Refresh
+            </button>
+          </div>
+        </div>
+      )}
+
+      {ghSignInPhase === "error" && ghError && (
+        <div className="mb-4">
+          <div className="text-sm text-red-300 mb-2">{ghError}</div>
+          <button className="option-card option-card--compact" onClick={() => ghResetSignIn()}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {ghLoading && <div className="text-xs text-[var(--text-muted)]">Checking status...</div>}
 
       <hr className="settings-divider" />
 

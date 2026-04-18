@@ -19,6 +19,10 @@ import type {
   UsageSettings,
   UsageOverview,
   PortInfo,
+  GhAuthStatus,
+  GitRemote,
+  PublishRepoArgs,
+  PublishRepoResult,
 } from "./types";
 
 // ── Workspace commands ──────────────────────────────────────────────
@@ -221,6 +225,52 @@ export function gitSwitchBranch(path: string, branchName: string): Promise<void>
 
 export function gitCreateBranch(path: string, branchName: string): Promise<void> {
   return invoke("git_create_branch", { path, branchName });
+}
+
+export function gitPushBranch(path: string, branch: string): Promise<void> {
+  return invoke("git_push_branch", { path, branch });
+}
+
+export function gitFetch(path: string): Promise<void> {
+  return invoke("git_fetch", { path });
+}
+
+export function gitPull(path: string, branch: string): Promise<void> {
+  return invoke("git_pull", { path, branch });
+}
+
+export function gitHasHeadCommit(path: string): Promise<boolean> {
+  return invoke("git_has_head_commit", { path });
+}
+
+// ── GitHub commands ───────────────────────────────────────────────
+
+export function githubAuthStatus(): Promise<GhAuthStatus> {
+  return invoke("github_auth_status");
+}
+
+export function githubAuthLogin(): Promise<void> {
+  return invoke("github_auth_login");
+}
+
+export function githubAuthLogout(hostname: string): Promise<void> {
+  return invoke("github_auth_logout", { hostname });
+}
+
+export function githubSetupGit(hostname: string): Promise<void> {
+  return invoke("github_setup_git", { hostname });
+}
+
+export function githubListOrgs(): Promise<string[]> {
+  return invoke("github_list_orgs");
+}
+
+export function githubListRemotes(path: string): Promise<GitRemote[]> {
+  return invoke("github_list_remotes", { path });
+}
+
+export function githubPublishRepo(args: PublishRepoArgs): Promise<PublishRepoResult> {
+  return invoke("github_publish_repo", { args });
 }
 
 // ── AGENTS.md editor ──────────────────────────────────────────────

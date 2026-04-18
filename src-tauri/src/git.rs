@@ -168,9 +168,53 @@ pub fn list_branches(path: &str) -> Result<Vec<String>, String> {
     Ok(branches)
 }
 
-pub fn push_branch(path: &str, branch: &str) -> Result<(), String> {
+/// Return the configured upstream remote for a branch (e.g. "laurilehtinen"),
+/// or `None` if the branch has no upstream set.
+fn branch_upstream_remote(path: &str, branch: &str) -> Option<String> {
     let output = Command::new("git")
-        .args(["-C", path, "push", "-u", "origin", branch])
+        .args(["-C", path, "config", "--get", &format!("branch.{branch}.remote")])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if name.is_empty() { None } else { Some(name) }
+}
+
+/// Push the current branch to its configured upstream. Falls back to
+/// `origin` (with `-u` to set upstream) when no upstream is configured —
+/// which is the common case right after `git init` or after creating a
+/// local branch. If `origin` doesn't exist either, git's own error message
+/// is surfaced verbatim.
+pub fn push_branch(path: &str, branch: &str) -> Result<(), String> {
+    let args: Vec<String> = match branch_upstream_remote(path, branch) {
+        Some(_) => vec!["push".to_string()],
+        None => vec![
+            "push".to_string(),
+            "-u".to_string(),
+            "origin".to_string(),
+            branch.to_string(),
+        ],
+    };
+
+    let mut cmd = Command::new("git");
+    cmd.args(["-C", path]);
+    for a in &args {
+        cmd.arg(a);
+    }
+    let output = cmd.output().map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(())
+}
+
+pub fn fetch(path: &str) -> Result<(), String> {
+    let output = Command::new("git")
+        .args(["-C", path, "fetch", "--all", "--prune"])
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -179,6 +223,42 @@ pub fn push_branch(path: &str, branch: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Pull the current branch from its configured upstream (fast-forward only).
+/// Falls back to `origin <branch>` when no upstream is set, mirroring
+/// `push_branch`.
+pub fn pull_branch(path: &str, branch: &str) -> Result<(), String> {
+    let args: Vec<String> = match branch_upstream_remote(path, branch) {
+        Some(_) => vec!["pull".to_string(), "--ff-only".to_string()],
+        None => vec![
+            "pull".to_string(),
+            "--ff-only".to_string(),
+            "origin".to_string(),
+            branch.to_string(),
+        ],
+    };
+
+    let mut cmd = Command::new("git");
+    cmd.args(["-C", path]);
+    for a in &args {
+        cmd.arg(a);
+    }
+    let output = cmd.output().map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(())
+}
+
+pub fn has_head_commit(path: &str) -> bool {
+    Command::new("git")
+        .args(["-C", path, "rev-parse", "--verify", "HEAD"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 // ── Worktree listing ─────────────────────────────────────────────────

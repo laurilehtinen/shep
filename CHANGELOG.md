@@ -10,6 +10,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **GitHub integration via the `gh` CLI.** Shep can now sign in to GitHub,
+  publish local repos (public or private), and push/pull/fetch from the Files
+  panel. Auth is delegated to the official GitHub CLI — no tokens pass through
+  Shep. The app shells out to `gh` for OAuth (`gh auth login --web`), token
+  storage (OS keyring), and credential-helper wiring (`gh auth setup-git`).
+  - **Settings → GitHub** shows CLI installation status, signed-in username,
+    scopes, and a **Sign in** button. The sign-in flow streams `gh`'s stdout
+    via Tauri events so the one-time device code appears directly in the
+    Settings panel (gh also copies it to the clipboard). After successful
+    login, Shep automatically runs `gh auth setup-git --hostname github.com`
+    so `git push` over HTTPS works without further setup.
+  - **New GitHub strip in the Files panel** shows the current GitHub remote
+    (with "Open on GitHub") or a **Publish to GitHub** button for unpublished
+    repos. A toolbar next to it exposes **Fetch**, **Pull (↓N)**, and
+    **Push (↑N)** with badge counters wired to `git status`'s ahead/behind
+    counts.
+  - **Publish to GitHub dialog** picks owner (user or org) from
+    `gh api user/orgs`, defaults the repo name to the project's folder
+    basename, supports optional description, private/public toggle, configurable
+    remote name (defaults to "github" when `origin` already exists), and a
+    "push after creating" checkbox. Preflight blocks publishing when gh is
+    missing, the user isn't signed in, no commits exist, or the remote name
+    collides.
+  - Backend: new `github.rs` module wrapping `gh` via `std::process::Command`
+    with a PATH augmented to include `/opt/homebrew/bin:/usr/local/bin` for
+    GUI-launched Tauri apps. Git helpers added to `git.rs`: `fetch`,
+    `pull_branch`, `has_head_commit`. Ten new Tauri commands registered.
+
+- **Commit dialog in the Files panel.** A new **Commit (N)** button appears in
+  the GitHub strip whenever the working tree is dirty. Opens a modal with the
+  commit message, a summary of staged/unstaged/untracked counts, and a "Stage
+  all changes" checkbox (defaults on when nothing is staged yet, off when the
+  user has already staged specific files via terminal). Uses the existing
+  `git_stage_all` + `git_commit` Tauri commands.
+
+### Fixed
+
+- **Push/pull now respect the branch's configured upstream remote.** The
+  previous implementation hard-coded `origin`, so on forks where `origin`
+  points to the upstream source repo (e.g. `stumptowndoug/shep`) a Push
+  from Shep tried to write to the wrong remote. `git_push_branch` and
+  `git_pull` now read `branch.<name>.remote` from the repo's git config
+  and delegate to plain `git push` / `git pull --ff-only`, falling back
+  to `origin` with `-u` only when no upstream is set yet (first push on
+  a fresh branch).
+
 - **AGENTS.md editor.** Each project now has an "AGENTS.md" entry in the
   sidebar (between "Commands" and "Files") that opens a lightweight
   monospace text editor in the main panel. Edits auto-save 800 ms after

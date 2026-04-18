@@ -173,6 +173,43 @@ export interface ChangedFile {
   old_path: string | null;
 }
 
+// ── GitHub integration ───────────────────────────────────────────────
+
+export interface GhAuthStatus {
+  installed: boolean;
+  version: string | null;
+  logged_in: boolean;
+  hostname: string | null;
+  username: string | null;
+  scopes: string[];
+  token_source: string | null;
+  git_protocol: string | null;
+}
+
+export interface GitRemote {
+  name: string;
+  url: string;
+  is_github: boolean;
+}
+
+export interface PublishRepoArgs {
+  path: string;
+  name: string;
+  owner: string | null;
+  description: string | null;
+  private: boolean;
+  remote_name: string;
+  push: boolean;
+}
+
+export interface PublishRepoResult {
+  html_url: string;
+  ssh_url: string;
+  https_url: string;
+  pushed: boolean;
+  push_error: string | null;
+}
+
 // ── Port info ───────────────────────────────────────────────────────
 
 export interface PortInfo {

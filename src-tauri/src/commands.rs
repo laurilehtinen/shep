@@ -9,6 +9,7 @@ use crate::agents;
 use crate::fonts::{self, FontFaceData, FontFamily};
 use crate::git;
 use crate::git::{ChangedFile, CreatedWorktree, GitStatus, WorktreeEntry};
+use crate::github::{self, GhAuthStatus, GitRemote, PublishRepoArgs, PublishRepoResult};
 use crate::pty::manager::PtyManager;
 use crate::pty::session::{PtyColorTheme, PtyOutput};
 use crate::usage::{LocalUsageDetails, ProviderUsageSnapshot, UsageDb, UsageOverview};
@@ -287,6 +288,58 @@ pub async fn git_list_branches(path: String) -> Result<Vec<String>, String> {
 #[tauri::command]
 pub async fn git_push_branch(path: String, branch: String) -> Result<(), String> {
     git::push_branch(&path, &branch)
+}
+
+#[tauri::command]
+pub async fn git_fetch(path: String) -> Result<(), String> {
+    git::fetch(&path)
+}
+
+#[tauri::command]
+pub async fn git_pull(path: String, branch: String) -> Result<(), String> {
+    git::pull_branch(&path, &branch)
+}
+
+#[tauri::command]
+pub async fn git_has_head_commit(path: String) -> bool {
+    git::has_head_commit(&path)
+}
+
+// ── GitHub CLI commands ─────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn github_auth_status() -> GhAuthStatus {
+    github::auth_status()
+}
+
+#[tauri::command]
+pub async fn github_auth_login(app: tauri::AppHandle) -> Result<(), String> {
+    github::auth_login(&app)
+}
+
+#[tauri::command]
+pub async fn github_auth_logout(hostname: String) -> Result<(), String> {
+    github::auth_logout(&hostname)
+}
+
+#[tauri::command]
+pub async fn github_setup_git(hostname: String) -> Result<(), String> {
+    github::setup_git_credential_helper(&hostname)
+}
+
+#[tauri::command]
+pub async fn github_list_orgs() -> Result<Vec<String>, String> {
+    github::list_orgs()
+}
+
+#[tauri::command]
+pub async fn github_list_remotes(path: String) -> Result<Vec<GitRemote>, String> {
+    github::list_remotes(&path)
+}
+
+#[tauri::command]
+pub async fn github_publish_repo(args: PublishRepoArgs) -> Result<PublishRepoResult, String> {
+    github::publish_repo(&args)
 }
 
 #[tauri::command]
