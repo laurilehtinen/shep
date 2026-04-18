@@ -8,10 +8,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
   server: {
-    port: 5173,
+    port: 5175,
     strictPort: true,
     host: host || false,
-    hmr: host ? { protocol: "ws", host, port: 5174 } : undefined,
+    hmr: host ? { protocol: "ws", host, port: 5176 } : undefined,
     watch: {
       ignored: ["**/src-tauri/**"],
     },
