@@ -29,6 +29,7 @@ export default function GitPanel() {
   const gitStatus = useGitStore(
     (s) => activeProjectPath ? s.projectGitStatus[activeProjectPath] ?? null : null,
   );
+  const refreshStatus = useGitStore((s) => s.refreshStatus);
 
   // Persistent per-repo UI state lives in useGitPanelStore so it survives
   // GitPanel unmounts (switching tabs or navigating away and back).
@@ -553,6 +554,10 @@ export default function GitPanel() {
                 loading={repoFileLoading}
                 error={repoFileError}
                 findTerm={leftSearch}
+                repoPath={activeProjectPath ?? undefined}
+                onSaved={() => {
+                  if (activeProjectPath) void refreshStatus(activeProjectPath);
+                }}
               />
             ) : (
               <div className="git-panel__diff">

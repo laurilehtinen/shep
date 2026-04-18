@@ -424,6 +424,15 @@ pub async fn write_agents_file(repo_path: String, contents: String) -> Result<()
     agents::write_agents(&repo_path, &contents)
 }
 
+#[tauri::command]
+pub async fn git_write_file_text(
+    path: String,
+    file_path: String,
+    contents: String,
+) -> Result<(), String> {
+    git::write_file_text(&path, &file_path, &contents)
+}
+
 // ── System commands ────────────────────────────────────────────────
 
 #[tauri::command]

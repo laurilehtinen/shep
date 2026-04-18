@@ -638,6 +638,42 @@ pub fn file_contents(path: &str, file_path: &str, source: &str) -> Result<String
     }
 }
 
+/// Write text to a file inside the repo working tree. Enforces repo-root
+/// containment using the same canonicalization dance as `file_contents`
+/// so values like "../.. /etc/passwd" or absolute paths are rejected.
+/// Unlike reads, the target may not exist yet (new file created via the
+/// file tree) — so we canonicalize the parent directory instead of the
+/// file itself, then join the final component back on.
+pub fn write_file_text(path: &str, file_path: &str, contents: &str) -> Result<(), String> {
+    if contents.len() as u64 > MAX_FILE_PREVIEW_BYTES {
+        return Err(format!(
+            "File too large to save from editor ({} bytes, limit {})",
+            contents.len(),
+            MAX_FILE_PREVIEW_BYTES
+        ));
+    }
+    let base = std::path::Path::new(path)
+        .canonicalize()
+        .map_err(|e| format!("Cannot resolve repo path: {e}"))?;
+    let joined = base.join(file_path);
+    let parent = joined
+        .parent()
+        .ok_or_else(|| format!("Invalid file path: {file_path}"))?;
+    let file_name = joined
+        .file_name()
+        .ok_or_else(|| format!("Invalid file path: {file_path}"))?;
+    let parent_real = parent
+        .canonicalize()
+        .map_err(|e| format!("Cannot resolve parent of {file_path}: {e}"))?;
+    if !parent_real.starts_with(&base) {
+        return Err(format!("Path {file_path} escapes repository root"));
+    }
+    let full_path = parent_real.join(file_name);
+    std::fs::write(&full_path, contents)
+        .map_err(|e| format!("Cannot write {file_path}: {e}"))?;
+    Ok(())
+}
+
 pub fn file_diff(path: &str, file_path: &str, staged: bool) -> Result<String, String> {
     let output = if staged {
         Command::new("git")

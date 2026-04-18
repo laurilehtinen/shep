@@ -153,6 +153,7 @@ pub fn run() {
             commands::open_url,
             commands::read_agents_file,
             commands::write_agents_file,
+            commands::git_write_file_text,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

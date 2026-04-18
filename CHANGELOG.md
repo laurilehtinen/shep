@@ -38,6 +38,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     GUI-launched Tauri apps. Git helpers added to `git.rs`: `fetch`,
     `pull_branch`, `has_head_commit`. Ten new Tauri commands registered.
 
+- **Inline file editor in the Files panel.** Selecting a file now shows a
+  pencil toggle in the viewer header; clicking it turns the syntax-highlighted
+  read view into a textarea so fast edits can be made without leaving Shep.
+  Uses the same 800 ms debounced autosave + Cmd/Ctrl-S flush pattern as the
+  AGENTS.md editor, with a Saved/Unsaved/Save failed status pill. Saves go
+  directly to the working tree via a new repo-scoped `git_write_file_text`
+  Tauri command (200 KB cap, same as the read preview; repo-root containment
+  enforced server-side). After a successful save, git status refreshes so
+  the file flips to "modified" in the tree.
+
 - **Commit dialog in the Files panel.** A new **Commit (N)** button appears in
   the GitHub strip whenever the working tree is dirty. Opens a modal with the
   commit message, a summary of staged/unstaged/untracked counts, and a "Stage

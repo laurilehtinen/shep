@@ -211,6 +211,17 @@ export function gitListFiles(path: string): Promise<string[]> {
   return invoke("git_list_files", { path });
 }
 
+/** Write raw text to a repo-relative path in the working tree. Enforces
+ *  repo-root containment server-side; rejects writes larger than the same
+ *  200 KB cap used by the read preview. */
+export function gitWriteFileText(
+  path: string,
+  filePath: string,
+  contents: string,
+): Promise<void> {
+  return invoke("git_write_file_text", { path, filePath, contents });
+}
+
 export function gitStageAll(path: string): Promise<void> {
   return invoke("git_stage_all", { path });
 }
