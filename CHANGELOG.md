@@ -55,6 +55,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   user has already staged specific files via terminal). Uses the existing
   `git_stage_all` + `git_commit` Tauri commands.
 
+- **"Not a git repo" warning on project add.** When a folder is added that
+  doesn't contain a `.git` directory, Shep now refreshes git status up front,
+  pushes an info notice, and switches to the Files panel — which already falls
+  back to the existing **Initialize git** form (`GitInitPanel`). The user lands
+  directly on the init + first-commit flow instead of having to discover it.
+
+- **"no git" indicator next to Files in the sidebar.** For projects without a
+  git repository, the **Files** row in each project's expanded sidebar now
+  shows a red "no git" pill plus a red status dot (using the existing
+  `--status-crashed` token). Clicking the row still opens the Files panel,
+  which routes to the Initialize git window. The warning is suppressed until
+  the git watcher has actually reported a status, so it doesn't flash on
+  startup before the first refresh resolves.
+
 ### Changed
 
 - **Push button disables when there is nothing to push.** Mirrors the Pull

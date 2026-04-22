@@ -254,6 +254,24 @@ export default function AppShell() {
         useTerminalStore.getState().switchProject(canonicalPath);
         useCommandStore.getState().switchProject(canonicalPath);
         useCommandStore.getState().loadCommands(canonicalPath, config.commands);
+
+        // Detect missing git up front so we can warn and route the user to the
+        // Initialize git window (GitPanel falls back to GitInitPanel when
+        // is_git_repo is false). The git watcher refresh runs asynchronously,
+        // so we explicitly refresh + read the status here.
+        await useGitStore.getState().refreshStatus(canonicalPath);
+        const status = useGitStore.getState().projectGitStatus[canonicalPath];
+        if (status && !status.is_git_repo) {
+          pushNotice(
+            {
+              tone: "info",
+              title: "Not a git repository",
+              message: "Initialize git to track changes and enable file history.",
+            },
+            { durationMs: 6000 },
+          );
+          useTerminalStore.getState().addPanelTab("git");
+        }
       } catch (error) {
         pushNotice({
           tone: "error",
