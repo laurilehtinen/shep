@@ -41,10 +41,7 @@ export default function GitInitPanel({ repoPath }: GitInitPanelProps) {
   const handleInitAndCommit = async () => {
     if (busy) return;
     const trimmed = message.trim();
-    if (!trimmed) {
-      pushNotice({ tone: "error", title: "Commit message is required" });
-      return;
-    }
+    const finalMessage = trimmed || Math.floor(Date.now() / 1000).toString();
 
     if (!(await runInit())) return;
 
@@ -64,7 +61,7 @@ export default function GitInitPanel({ repoPath }: GitInitPanelProps) {
 
     setPhase("committing");
     try {
-      await gitCommit(repoPath, trimmed);
+      await gitCommit(repoPath, finalMessage);
       pushNotice({ tone: "success", title: "Repository initialized" });
     } catch (error) {
       pushNotice({
@@ -133,7 +130,7 @@ export default function GitInitPanel({ repoPath }: GitInitPanelProps) {
             type="submit"
             className="btn-primary"
             style={{ fontSize: 12, padding: "6px 0" }}
-            disabled={busy || !message.trim()}
+            disabled={busy}
           >
             {buttonLabel}
           </button>

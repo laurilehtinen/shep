@@ -34,22 +34,19 @@ export default function CommitDialog({ repoPath, status, onClose }: Props) {
 
   const handleSubmit = async () => {
     if (submitting) return;
-    const trimmed = message.trim();
-    if (!trimmed) {
-      setError("Commit message is required.");
-      return;
-    }
     if (nothingToCommit) {
       setError("No staged changes. Enable \"Stage all changes\" to include unstaged files.");
       return;
     }
+    const trimmed = message.trim();
+    const finalMessage = trimmed || Math.floor(Date.now() / 1000).toString();
     setSubmitting(true);
     setError(null);
     try {
       if (willStage) await gitStageAll(repoPath);
-      await gitCommit(repoPath, trimmed);
+      await gitCommit(repoPath, finalMessage);
       await refreshStatus(repoPath);
-      pushNotice({ tone: "success", title: "Committed", message: trimmed });
+      pushNotice({ tone: "success", title: "Committed", message: finalMessage });
       onClose();
     } catch (e) {
       setError(getErrorMessage(e));
@@ -152,7 +149,7 @@ export default function CommitDialog({ repoPath, status, onClose }: Props) {
             <button
               type="submit"
               className="btn-primary"
-              disabled={submitting || !message.trim() || nothingToCommit}
+              disabled={submitting || nothingToCommit}
               style={{ fontSize: 12, padding: "6px 14px" }}
             >
               {submitting ? "Committing…" : "Commit"}
