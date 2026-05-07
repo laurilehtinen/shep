@@ -8,7 +8,19 @@ import { assistantLogoSrc, getAssistantLogoClass } from "../../lib/assistantLogo
 import { handleActionKey } from "../../lib/a11y";
 import { useGitStore } from "../../stores/useGitStore";
 import tabKindMeta, { extraActions } from "../../lib/tabKindMeta";
-import type { UnifiedTab } from "../../lib/types";
+import type { TabActivity, UnifiedTab } from "../../lib/types";
+
+type CommandTabStatus = "running" | "done" | "failed";
+
+function commandTabStatus(
+  tab: UnifiedTab,
+  activity: TabActivity | undefined,
+): CommandTabStatus | null {
+  if (tab.kind !== "terminal" || !tab.commandName) return null;
+  if (!activity) return null;
+  if (activity.alive) return "running";
+  return activity.exitCode === 0 ? "done" : "failed";
+}
 
 
 function NewSessionButton({ onNewAssistant, onNewShell, onNewCommands, onNewGit, onOpenInEditor }: { onNewAssistant: () => void; onNewShell: () => void; onNewCommands: () => void; onNewGit: () => void; onOpenInEditor: () => void }) {
@@ -114,6 +126,7 @@ export default function TabBar({
   const { activeProjectPath, projectState } = useTerminalStore(
     useShallow((s) => ({ activeProjectPath: s.activeProjectPath, projectState: s.activeProjectPath ? s.projectState[s.activeProjectPath] : null })),
   );
+  const tabActivity = useTerminalStore((s) => s.tabActivity);
   const projectTerminals = projectState;
   const projectName = activeProjectPath ? activeProjectPath.split("/").pop() : null;
   const gitStatus = useGitStore((s) => activeProjectPath ? s.projectGitStatus[activeProjectPath] : null);
@@ -221,10 +234,16 @@ export default function TabBar({
           const showDropBefore = dropIndex !== null && dragTabId && tab.id !== dragTabId && dropIndex === i;
           const showDropAfter = dropIndex !== null && dragTabId && tab.id !== dragTabId && dropIndex === i + 1 && i === tabs.length - 1;
 
+          const cmdStatus =
+            tab.kind === "terminal"
+              ? commandTabStatus(tab, tabActivity[tab.ptyId])
+              : null;
+
           return (
             <div
               key={tab.id}
               data-tab-index={i}
+              data-cmd-status={cmdStatus ?? undefined}
               className={`tab ${isActive ? "active" : ""}${isDragging ? " dragging" : ""}${showDropBefore ? " drop-before" : ""}${showDropAfter ? " drop-after" : ""}`}
               onClick={() => {
                 if (!dragRef.current.didDrag) handleSelectTab(tab.id);

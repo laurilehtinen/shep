@@ -17,6 +17,7 @@ interface GithubStore {
   error: string | null;
   signInPhase: SignInPhase;
   oneTimeCode: string | null;
+  verificationUrl: string | null;
   signInLog: string[];
   refresh: () => Promise<void>;
   signIn: () => Promise<void>;
@@ -33,6 +34,7 @@ export const useGithubStore = create<GithubStore>((set, get) => ({
   error: null,
   signInPhase: "idle",
   oneTimeCode: null,
+  verificationUrl: null,
   signInLog: [],
 
   refresh: async () => {
@@ -49,6 +51,7 @@ export const useGithubStore = create<GithubStore>((set, get) => ({
     set({
       signInPhase: "waiting",
       oneTimeCode: null,
+      verificationUrl: null,
       signInLog: [],
       error: null,
     });
@@ -68,6 +71,11 @@ export const useGithubStore = create<GithubStore>((set, get) => ({
       unlisteners.push(
         await listen<string>("gh-auth-code", (event) => {
           set({ oneTimeCode: event.payload });
+        }),
+      );
+      unlisteners.push(
+        await listen<string>("gh-auth-url", (event) => {
+          set({ verificationUrl: event.payload });
         }),
       );
 
@@ -112,6 +120,12 @@ export const useGithubStore = create<GithubStore>((set, get) => ({
   },
 
   resetSignIn: () => {
-    set({ signInPhase: "idle", oneTimeCode: null, signInLog: [], error: null });
+    set({
+      signInPhase: "idle",
+      oneTimeCode: null,
+      verificationUrl: null,
+      signInLog: [],
+      error: null,
+    });
   },
 }));

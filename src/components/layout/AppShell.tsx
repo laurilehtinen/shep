@@ -23,7 +23,6 @@ import { useEditorStore } from "../../stores/useEditorStore";
 import { useTerminalSettingsStore } from "../../stores/useTerminalSettingsStore";
 import { useUsageStore } from "../../stores/useUsageStore";
 import { useUsageSettingsStore } from "../../stores/useUsageSettingsStore";
-import { useUpdateStore } from "../../stores/useUpdateStore";
 import { initNotifications } from "../../lib/notifications";
 import { getErrorMessage } from "../../lib/errors";
 import { useNoticeStore } from "../../stores/useNoticeStore";
@@ -47,6 +46,7 @@ function toCommandConfig(command: CommandState): CommandConfig {
   return {
     name: command.name,
     command: command.command,
+    label: command.label,
     autostart: command.autostart,
     env: command.env,
     cwd: command.cwd,
@@ -178,20 +178,7 @@ export default function AppShell() {
     void initNotifications();
     getUsername().then((name) => useUIStore.getState().setUsername(name));
     getComputerName().then((name) => useUIStore.getState().setComputerName(name));
-
-    // Check for updates after startup settles
-    const updateTimer = window.setTimeout(async () => {
-      await useUpdateStore.getState().checkForUpdate();
-      const { status, availableVersion } = useUpdateStore.getState();
-      if (status === "available" && availableVersion) {
-        pushNotice(
-          { tone: "info", title: "Update available", message: `Version ${availableVersion} is ready to download` },
-          { durationMs: 8000 },
-        );
-      }
-    }, 3000);
-    return () => window.clearTimeout(updateTimer);
-  }, [fetchRepos, loadEditorSettings, loadTerminalSettings, loadUsageSettings, fetchUsageSnapshots, pushNotice]);
+  }, [fetchRepos, loadEditorSettings, loadTerminalSettings, loadUsageSettings, fetchUsageSnapshots]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -314,6 +301,7 @@ export default function AppShell() {
           {
             name: cmd.name,
             command: cmd.command,
+            label: cmd.label,
             autostart: cmd.autostart,
             env: cmd.env,
             cwd: cmd.cwd,
@@ -521,23 +509,10 @@ export default function AppShell() {
         case "settings":
           useUIStore.getState().toggleSettings();
           break;
-        case "check_updates":
-          void useUpdateStore.getState().checkForUpdate().then(() => {
-            const { status, availableVersion } = useUpdateStore.getState();
-            if (status === "available" && availableVersion) {
-              pushNotice(
-                { tone: "info", title: "Update available", message: `Version ${availableVersion} is ready to download` },
-                { durationMs: 8000 },
-              );
-            } else if (status === "idle") {
-              pushNotice({ tone: "success", title: "You're up to date", message: "No updates available" });
-            }
-          });
-          break;
       }
     });
     return () => { unlisten.then((f) => f()); };
-  }, [handleNewShell, handleNewAssistant, handleOpenInEditor, pushNotice]);
+  }, [handleNewShell, handleNewAssistant, handleOpenInEditor]);
 
   const showOverlay = settingsActive || usagePanelActive || portsPanelActive;
 

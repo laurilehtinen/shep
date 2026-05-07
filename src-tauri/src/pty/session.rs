@@ -651,4 +651,16 @@ mod tests {
         assert_eq!(forwarded, "beforeafter");
         assert_eq!(response, "\x1b[?2031;2$y\x1b[?997;2n\x1b[?997;2n");
     }
+
+    #[test]
+    fn passes_through_sgr_color_sequences_unchanged() {
+        let (forwarded, response) =
+            run_query("\x1b[31mred\x1b[0m \x1b[1;33mbold-yellow\x1b[0m \x1b[38;5;208m256-orange\x1b[0m \x1b[38;2;100;200;50mtruecolor\x1b[0m");
+
+        assert_eq!(
+            forwarded,
+            "\x1b[31mred\x1b[0m \x1b[1;33mbold-yellow\x1b[0m \x1b[38;5;208m256-orange\x1b[0m \x1b[38;2;100;200;50mtruecolor\x1b[0m"
+        );
+        assert_eq!(response, "");
+    }
 }

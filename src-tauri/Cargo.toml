@@ -34,6 +34,4 @@ rusqlite = { version = "0.33", features = ["bundled"] }
 notify = { version = "7", features = ["macos_fsevent"] }
 core-text = "21"
 core-foundation = "0.10"
-tauri-plugin-updater = "2"
-tauri-plugin-process = "2"
 url = "2"

@@ -16,12 +16,14 @@ interface CommandsPanelProps {
 }
 
 interface CommandDraft {
+  label: string;
   command: string;
   autostart: boolean;
 }
 
 function createDraft(command?: CommandState): CommandDraft {
   return {
+    label: command?.label ?? "",
     command: command?.command ?? "",
     autostart: command?.autostart ?? false,
   };
@@ -80,19 +82,14 @@ function CommandRow({
   const isRunning = command?.status === "running";
 
   const isDirty = isNew
-    ? draft.command.trim().length > 0 || draft.autostart
+    ? draft.command.trim().length > 0 || draft.label.trim().length > 0 || draft.autostart
     : draft.command !== command?.command
+      || draft.label.trim() !== (command?.label ?? "")
       || draft.autostart !== command?.autostart;
-
-  useEffect(() => {
-    if (!isNew && command) {
-      setDraft(createDraft(command));
-      setError(null);
-    }
-  }, [command, isNew]);
 
   const buildConfig = (showErrors: boolean): CommandConfig | null => {
     const shellCommand = draft.command.trim();
+    const label = draft.label.trim();
 
     if (!shellCommand) {
       if (showErrors) {
@@ -105,6 +102,7 @@ function CommandRow({
     return {
       name: command?.name ?? generateCommandName(shellCommand, commands),
       command: shellCommand,
+      label: label || null,
       autostart: draft.autostart,
       env: command?.env ?? {},
       cwd: command?.cwd ?? null,
@@ -165,20 +163,38 @@ function CommandRow({
     }
   };
 
+  const hasLabel = draft.label.trim().length > 0;
+
   return (
     <div className="commands-panel__row-shell">
       <div className="commands-panel__row-line">
-        <div className={`commands-panel__row ${isNew ? "is-new" : ""}`}>
-          <input
-            className="commands-panel__input commands-panel__input--command"
-            placeholder={
-              isNew
-                ? "e.g. pnpm dev, docker compose up, redis-server"
-                : "Command"
-            }
-            value={draft.command}
-            onChange={(e) => setDraft((current) => ({ ...current, command: e.target.value }))}
-          />
+        <div
+          className={`commands-panel__row ${isNew ? "is-new" : ""} ${
+            hasLabel ? "has-label" : ""
+          }`}
+        >
+          <div className="commands-panel__row-fields">
+            <input
+              className="commands-panel__input commands-panel__input--label"
+              placeholder="Name (optional)"
+              value={draft.label}
+              onChange={(e) =>
+                setDraft((current) => ({ ...current, label: e.target.value }))
+              }
+            />
+            <input
+              className="commands-panel__input commands-panel__input--command"
+              placeholder={
+                isNew
+                  ? "e.g. pnpm dev, docker compose up, redis-server"
+                  : "Command"
+              }
+              value={draft.command}
+              onChange={(e) =>
+                setDraft((current) => ({ ...current, command: e.target.value }))
+              }
+            />
+          </div>
           <label className="commands-panel__auto">
             <input
               type="checkbox"

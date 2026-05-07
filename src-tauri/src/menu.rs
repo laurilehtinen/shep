@@ -8,15 +8,11 @@ pub fn setup(app: &AppHandle<Wry>) -> tauri::Result<()> {
     let about_meta = AboutMetadataBuilder::new()
         .version(version)
         .build();
-    let check_updates =
-        MenuItem::with_id(app, "check_updates", "Check for Updates…", true, None::<&str>)?;
     let settings =
         MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
 
     let app_menu = SubmenuBuilder::new(app, "Shep")
         .about(Some(about_meta))
-        .separator()
-        .item(&check_updates)
         .separator()
         .item(&settings)
         .separator()

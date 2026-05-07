@@ -8,6 +8,7 @@ export interface RepoInfo {
 export interface CommandConfig {
   name: string;
   command: string;
+  label: string | null;
   autostart: boolean;
   env: Record<string, string>;
   cwd: string | null;
@@ -70,6 +71,7 @@ export type CommandStatus = "stopped" | "running" | "crashed";
 export interface CommandState {
   name: string;
   command: string;
+  label: string | null;
   status: CommandStatus;
   ptyId: number | null;
   autostart: boolean;

@@ -69,7 +69,9 @@ pub struct GitRemote {
 fn gh_command() -> Command {
     let mut cmd = Command::new("gh");
     let existing = std::env::var("PATH").unwrap_or_default();
-    let augmented = format!("/opt/homebrew/bin:/usr/local/bin:{existing}");
+    // /usr/bin is required so gh can find `open` (macOS) when the parent's
+    // PATH was minimal — otherwise gh's own browser-launch silently fails.
+    let augmented = format!("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:{existing}");
     cmd.env("PATH", augmented);
     cmd
 }
@@ -159,12 +161,13 @@ pub fn auth_status() -> GhAuthStatus {
         return status;
     }
 
-    // Newer gh versions support `--active` which returns only the default host.
-    // Fall back to parsing all hosts and picking github.com if --active fails.
-    let json = run_gh(&["auth", "status", "--active", "-t", "--json", "host,login,scopes,token_source,gitProtocol"])
-        .or_else(|_| run_gh(&["auth", "status", "--json", "host,login,scopes,token_source,gitProtocol"]));
-
-    let Ok(raw) = json else {
+    // `gh auth status --json` only accepts the field name `hosts`. The shape
+    // is `{ "hosts": { "<hostname>": [ { state, active, host, login,
+    // tokenSource, scopes, gitProtocol } ] } }`. Keys use camelCase, so we
+    // read `tokenSource` / `gitProtocol` here (the struct itself is
+    // snake_case for serde defaults — that only matters for the frontend
+    // payload, not the gh JSON we parse).
+    let Ok(raw) = run_gh(&["auth", "status", "--json", "hosts"]) else {
         return status;
     };
 
@@ -173,21 +176,33 @@ pub fn auth_status() -> GhAuthStatus {
         Err(_) => return status,
     };
 
-    // Two possible shapes: a single object (with --active) or an array.
-    let entry: Option<&Value> = if parsed.is_array() {
-        parsed
-            .as_array()
-            .and_then(|arr| arr.iter().find(|e| e.get("host").and_then(Value::as_str) == Some("github.com")))
-            .or_else(|| parsed.as_array().and_then(|arr| arr.first()))
-    } else {
-        Some(&parsed)
+    let Some(hosts) = parsed.get("hosts").and_then(Value::as_object) else {
+        return status;
     };
 
+    // Prefer github.com; fall back to whatever single host is configured.
+    let entries = hosts
+        .get("github.com")
+        .or_else(|| hosts.values().next())
+        .and_then(Value::as_array);
+
+    let entry = entries.and_then(|arr| {
+        arr.iter()
+            .find(|e| e.get("active").and_then(Value::as_bool) == Some(true))
+            .or_else(|| arr.first())
+    });
+
     if let Some(entry) = entry {
+        // gh reports state="success" for a working token; anything else
+        // (e.g. expired, missing scopes) means the user must re-auth.
+        if entry.get("state").and_then(Value::as_str) != Some("success") {
+            return status;
+        }
+
         status.logged_in = true;
         status.hostname = entry.get("host").and_then(Value::as_str).map(str::to_string);
         status.username = entry.get("login").and_then(Value::as_str).map(str::to_string);
-        status.token_source = entry.get("token_source").and_then(Value::as_str).map(str::to_string);
+        status.token_source = entry.get("tokenSource").and_then(Value::as_str).map(str::to_string);
         status.git_protocol = entry.get("gitProtocol").and_then(Value::as_str).map(str::to_string);
         if let Some(scopes) = entry.get("scopes").and_then(Value::as_str) {
             status.scopes = scopes
@@ -204,10 +219,15 @@ pub fn auth_status() -> GhAuthStatus {
 /// Run `gh auth login --web` and stream its output to the frontend via Tauri
 /// events. We pipe `\n` to stdin so gh auto-opens the browser (skipping the
 /// "Press Enter" prompt), then parse each output line looking for the
-/// one-time code. Events:
+/// one-time code and the verification URL. Because gh's own browser-launch
+/// can silently fail when Shep is started from Finder with a minimal env,
+/// we also open the URL ourselves as soon as we see it. Events:
 ///
 /// - `gh-auth-line` — every stdout/stderr line (plain string)
 /// - `gh-auth-code` — the one-time device code (e.g. "ABCD-1234")
+/// - `gh-auth-url`  — the device-flow verification URL (e.g.
+///                    "https://github.com/login/device"). The UI shows this
+///                    as a clickable fallback in case the browser didn't open.
 ///
 /// The function blocks until `gh` exits or [`AUTH_LOGIN_TIMEOUT`] elapses.
 pub fn auth_login(app: &AppHandle) -> Result<(), String> {
@@ -276,10 +296,21 @@ pub fn auth_login(app: &AppHandle) -> Result<(), String> {
 fn spawn_line_forwarder<R: std::io::Read + Send + 'static>(app: AppHandle, reader: R) {
     std::thread::spawn(move || {
         let reader = BufReader::new(reader);
+        // Track whether we've already kicked off our own browser launch — gh
+        // mixes the URL across stdout/stderr, and the line may reappear, so
+        // we only fire once.
+        let mut opened = false;
         for line in reader.lines().map_while(Result::ok) {
             let _ = app.emit("gh-auth-line", &line);
             if let Some(code) = extract_one_time_code(&line) {
                 let _ = app.emit("gh-auth-code", &code);
+            }
+            if !opened {
+                if let Some(url) = extract_verification_url(&line) {
+                    let _ = app.emit("gh-auth-url", &url);
+                    let _ = open_browser(&url);
+                    opened = true;
+                }
             }
         }
     });
@@ -301,6 +332,37 @@ fn extract_one_time_code(line: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// gh prints "Press Enter to open https://github.com/login/device in your
+/// browser..." (and similar variants on browser-launch failure). We pull
+/// the first https://github.com/login/... URL out of the line.
+fn extract_verification_url(line: &str) -> Option<String> {
+    for token in line.split_whitespace() {
+        let t = token.trim_end_matches(|c: char| matches!(c, '.' | ',' | ')' | ']' | '"' | '\''));
+        if t.starts_with("https://github.com/login/") {
+            return Some(t.to_string());
+        }
+    }
+    None
+}
+
+/// Best-effort browser launch. Uses absolute paths so it works even when the
+/// parent's PATH is minimal (Finder-launched apps on macOS). Failure is not
+/// reported back — the UI always shows the URL as a fallback button.
+fn open_browser(url: &str) -> std::io::Result<std::process::ExitStatus> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("/usr/bin/open").arg(url).status()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open").arg(url).status()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd").args(["/C", "start", "", url]).status()
+    }
 }
 
 pub fn auth_logout(hostname: &str) -> Result<(), String> {

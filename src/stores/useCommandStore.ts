@@ -37,6 +37,7 @@ export const useCommandStore = create<CommandStore>((set, get) => ({
     const commands: CommandState[] = configs.map((c) => ({
       name: c.name,
       command: c.command,
+      label: c.label ?? null,
       status: "stopped",
       ptyId: null,
       autostart: c.autostart,

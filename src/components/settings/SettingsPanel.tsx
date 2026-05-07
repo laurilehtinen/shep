@@ -9,7 +9,6 @@ import { useThemeStore } from "../../stores/useThemeStore";
 import { useKeybindingStore } from "../../stores/useKeybindingStore";
 import { useTerminalSettingsStore } from "../../stores/useTerminalSettingsStore";
 import { useUsageSettingsStore } from "../../stores/useUsageSettingsStore";
-import { useUpdateStore } from "../../stores/useUpdateStore";
 import { useGithubStore } from "../../stores/useGithubStore";
 import { assistantLogoSrc, getAssistantLogoClass } from "../../lib/assistantLogos";
 import {
@@ -19,7 +18,7 @@ import {
 import { ALL_USAGE_PROVIDERS } from "../usage/usageHelpers";
 import type { CursorStyle, BudgetMode, FontFamily } from "../../lib/types";
 import { getErrorMessage } from "../../lib/errors";
-import { listMonospaceFamilies } from "../../lib/tauri";
+import { listMonospaceFamilies, openUrl } from "../../lib/tauri";
 
 interface AppMeta {
   name: string;
@@ -87,21 +86,12 @@ export default function SettingsPanel() {
   const [budgetInputs, setBudgetInputs] = useState<Record<string, string>>({});
   const [cutoffInputs, setCutoffInputs] = useState<Record<string, string>>({});
 
-  const updateStatus = useUpdateStore((s) => s.status);
-  const availableVersion = useUpdateStore((s) => s.availableVersion);
-  const releaseNotesUrl = useUpdateStore((s) => s.releaseNotesUrl);
-  const downloadProgress = useUpdateStore((s) => s.downloadProgress);
-  const updateError = useUpdateStore((s) => s.error);
-  const hasChecked = useUpdateStore((s) => s.hasChecked);
-  const checkForUpdate = useUpdateStore((s) => s.checkForUpdate);
-  const downloadAndInstall = useUpdateStore((s) => s.downloadAndInstall);
-  const restartApp = useUpdateStore((s) => s.restartApp);
-
   const ghStatus = useGithubStore((s) => s.status);
   const ghLoading = useGithubStore((s) => s.loading);
   const ghError = useGithubStore((s) => s.error);
   const ghSignInPhase = useGithubStore((s) => s.signInPhase);
   const ghOneTimeCode = useGithubStore((s) => s.oneTimeCode);
+  const ghVerificationUrl = useGithubStore((s) => s.verificationUrl);
   const ghRefresh = useGithubStore((s) => s.refresh);
   const ghSignIn = useGithubStore((s) => s.signIn);
   const ghLogout = useGithubStore((s) => s.logout);
@@ -636,7 +626,7 @@ export default function SettingsPanel() {
           <div className="flex flex-wrap gap-2 mt-2">
             <button
               className="option-card option-card--compact"
-              onClick={() => import("../../lib/tauri").then((m) => m.openUrl("https://cli.github.com/"))}
+              onClick={() => void openUrl("https://cli.github.com/")}
             >
               Install instructions
             </button>
@@ -684,6 +674,24 @@ export default function SettingsPanel() {
             </>
           ) : (
             <div className="text-xs text-[var(--text-muted)]">Waiting for GitHub CLI to start...</div>
+          )}
+          {ghVerificationUrl && (
+            <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+              <div className="text-xs text-[var(--text-muted)] mb-2">
+                If the browser didn't open, visit this URL manually:
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  className="option-card option-card--compact"
+                  onClick={() => void openUrl(ghVerificationUrl)}
+                >
+                  Open in browser
+                </button>
+                <code className="text-xs select-all break-all" style={{ color: "var(--text-secondary)" }}>
+                  {ghVerificationUrl}
+                </code>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -756,73 +764,6 @@ export default function SettingsPanel() {
       )}
 
       {ghLoading && <div className="text-xs text-[var(--text-muted)]">Checking status...</div>}
-
-      <hr className="settings-divider" />
-
-      {/* ── Updates ─────────────────────────────────────────── */}
-      <h2 className="section-label !p-0 mb-4">Updates</h2>
-
-      {updateStatus === "available" && (
-        <div className="settings-meta-grid mb-4" style={{ border: "1px solid rgba(122,162,247,0.3)", borderRadius: 8, padding: 12 }}>
-          <div className="settings-meta-row">
-            <span className="settings-meta-row__label">New version</span>
-            <span>{availableVersion}</span>
-          </div>
-          {releaseNotesUrl && (
-            <div className="settings-meta-row">
-              <span className="settings-meta-row__label">Release notes</span>
-              <button
-                className="text-sm underline text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent border-0 cursor-pointer p-0"
-                onClick={() => import("../../lib/tauri").then((mod) => mod.openUrl(releaseNotesUrl))}
-              >
-                View on GitHub
-              </button>
-            </div>
-          )}
-          <button
-            className="btn-primary mt-2"
-            onClick={() => void downloadAndInstall()}
-          >
-            Download &amp; Install
-          </button>
-        </div>
-      )}
-
-      {updateStatus === "downloading" && (
-        <div className="mb-4">
-          <div className="update-progress-track mb-2">
-            <div className="update-progress-fill" style={{ width: `${downloadProgress}%` }} />
-          </div>
-          <div className="text-xs text-[var(--text-muted)]">Downloading... {downloadProgress}%</div>
-        </div>
-      )}
-
-      {updateStatus === "ready" && (
-        <div className="mb-4">
-          <div className="text-sm text-[var(--text-secondary)] mb-2">Update downloaded and ready to install.</div>
-          <button className="btn-primary" onClick={() => void restartApp()}>
-            Restart Now
-          </button>
-        </div>
-      )}
-
-      {updateStatus === "error" && updateError && (
-        <div className="text-sm text-red-300 mb-4">{updateError}</div>
-      )}
-
-      {updateStatus !== "downloading" && updateStatus !== "ready" && (
-        <button
-          className="btn-primary"
-          disabled={updateStatus === "checking"}
-          onClick={() => void checkForUpdate()}
-        >
-          {updateStatus === "checking" ? "Checking..." : "Check for Updates"}
-        </button>
-      )}
-
-      {updateStatus === "idle" && hasChecked && (
-        <div className="text-xs text-[var(--text-muted)] mt-2">You're on the latest version.</div>
-      )}
 
       <hr className="settings-divider" />
 

@@ -14,8 +14,6 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-set-effects",
     "dialog:default",
-    "notification:default",
-    "updater:default",
-    "process:allow-restart"
+    "notification:default"
   ]
 }

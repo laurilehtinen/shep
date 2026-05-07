@@ -258,6 +258,8 @@ pub struct RegisteredRepo {
 pub struct CommandConfig {
     pub name: String,
     pub command: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     #[serde(default)]
     pub autostart: bool,
     #[serde(default)]
